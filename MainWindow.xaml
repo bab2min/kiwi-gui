@@ -35,29 +35,27 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="90"/>
                 </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="20"/>
-                    <RowDefinition Height="20"/>
-                    <RowDefinition Height="30"/>
-                </Grid.RowDefinitions>
                 <TextBox Grid.RowSpan="4" Name="InputTxt" ToolTip="여기에 분석할 텍스트를 입력합니다." AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"></TextBox>
-                <ComboBox Grid.Column="1" Grid.Row="1" SelectedIndex="0" Name="TypeCmb" ToolTip="분석 단위를 선택합니다.">
-                    <ComboBoxItem>줄별 분석</ComboBoxItem>
-                    <ComboBoxItem>전체 분석</ComboBoxItem>
-                </ComboBox>
-                <ComboBox Grid.Column="1" Grid.Row="2" SelectedIndex="0" Name="TopNCmb" ToolTip="분석 결과를 몇 개까지 출력할 지 선택합니다.">
-                    <ComboBoxItem>결과 1개</ComboBoxItem>
-                    <ComboBoxItem>결과 2개</ComboBoxItem>
-                    <ComboBoxItem>결과 3개</ComboBoxItem>
-                    <ComboBoxItem>결과 4개</ComboBoxItem>
-                    <ComboBoxItem>결과 5개</ComboBoxItem>
-                </ComboBox>
-                <Button Grid.Column="1" Grid.Row="3" Name="AnalyzeBtn" ToolTip="분석을 시작합니다." Click="AnalyzeBtn_Click">
-                    <TextBlock>
+                <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
+                    <ComboBox SelectedIndex="0" Name="TypeCmb" ToolTip="분석 단위를 선택합니다.">
+                        <ComboBoxItem>줄별 분석</ComboBoxItem>
+                        <ComboBoxItem>전체 분석</ComboBoxItem>
+                    </ComboBox>
+                    <ComboBox SelectedIndex="0" Name="TopNCmb" ToolTip="분석 결과를 몇 개까지 출력할 지 선택합니다.">
+                        <ComboBoxItem>결과 1개</ComboBoxItem>
+                        <ComboBoxItem>결과 2개</ComboBoxItem>
+                        <ComboBoxItem>결과 3개</ComboBoxItem>
+                        <ComboBoxItem>결과 4개</ComboBoxItem>
+                        <ComboBoxItem>결과 5개</ComboBoxItem>
+                    </ComboBox>
+                    <CheckBox Name="IntegratedAllomorph" IsChecked="True" ToolTip="아/어, 았/었 등의 이형태를 통합할 지 선택합니다.">이형태 통합</CheckBox>
+                    <Button Name="AnalyzeBtn" ToolTip="분석을 시작합니다." Click="AnalyzeBtn_Click">
+                        <TextBlock>
                         분석 <TextBlock Foreground="#FF00F000">▶</TextBlock>
                     </TextBlock>
-                </Button>
+                    </Button>
+                </StackPanel>
+                
             </Grid>
             <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" />
             <RichTextBox Grid.Row="2" Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}" Name="ResultBlock" ToolTip="여기에 분석 결과가 나타납니다." IsReadOnly="True" IsReadOnlyCaretVisible="True" />

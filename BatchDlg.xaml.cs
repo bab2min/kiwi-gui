@@ -23,6 +23,7 @@ namespace KiwiGui
             public int topN;
             public bool formatTag;
             public string formatSep;
+            public bool integrateAllomorph;
         }
 
         public BatchDlg()
@@ -64,6 +65,7 @@ namespace KiwiGui
         private void analyzeWriteResult(string input, WorkerArgs args, string outputPath)
         {
             string[] lines = args.byline ? input.Trim().Split('\n') : new string[] { input.Trim() };
+            instKiwi.setOption(KiwiCS.KIWI_INTEGRATE_ALLOMORPH, args.integrateAllomorph ? 1 : 0);
             using (StreamWriter output = new StreamWriter(outputPath))
             {
                 foreach (string line in lines)
@@ -163,6 +165,7 @@ namespace KiwiGui
             args.topN = TopNCmb.SelectedIndex + 1;
             args.formatTag = FormatCmb.SelectedIndex % 2 == 1;
             args.formatSep = FormatCmb.SelectedIndex / 2 == 1 ? " + " : "\t";
+            args.integrateAllomorph = IntegrateAllomorph.IsChecked.Value;
             worker.RunWorkerAsync(args);
         }
 
