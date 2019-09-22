@@ -135,6 +135,12 @@ namespace KiwiGui
         [DllImport(DLLPATH, CallingConvention = CallingConvention.Cdecl)]
         private static extern int kiwi_loadUserDict(IntPtr handle, IntPtr dictPath);
 
+        [DllImport(DLLPATH, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int kiwi_getOption(IntPtr handle, int option);
+
+        [DllImport(DLLPATH, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void kiwi_setOption(IntPtr handle, int option, int value);
+
         // analyzing function
         [DllImport(DLLPATH, CallingConvention = CallingConvention.Cdecl)]
         private static extern IntPtr kiwi_analyzeW(IntPtr handle, IntPtr text, int topN);
@@ -308,13 +314,16 @@ namespace KiwiGui
         }
 
         public const int KIWI_LOAD_DEFAULT_DICT = 1;
+        public const int KIWI_INTEGRATE_ALLOMORPH = 2;
 
         /*
          * - modelPath: folder path where model files are located
          * - numThread: the number of threads Kiwi will use. 1 for single thread processing, 0 for all threads available
-         * - options: 0 for not loading default dictionary, KIWI_LOAD_DEFAULT_DICT for loading default dictionary
+         * - options: bit mask option
+         *            KIWI_LOAD_DEFAULT_DICT for loading additional dictionary
+         *            KIWI_INTEGRATE_ALLOMORPH for integrating allomorphes into basic form (ex: 아/어, 았/었)
          */
-        public KiwiCS(string modelPath, int numThread, int options = KIWI_LOAD_DEFAULT_DICT)
+        public KiwiCS(string modelPath, int numThread, int options = KIWI_LOAD_DEFAULT_DICT | KIWI_INTEGRATE_ALLOMORPH)
         {
             if(numThread < 0) throw new KiwiException("numThread must > 0");
             inst = kiwi_init(new Utf8String(modelPath).IntPtr, numThread, options);
@@ -398,6 +407,16 @@ namespace KiwiGui
             int ret = kiwi_loadUserDict(inst, new Utf8String(dictPath).IntPtr);
             if (ret < 0) throw new KiwiException(Marshal.PtrToStringAnsi(kiwi_error()));
             return ret;
+        }
+
+        public int getOption(int option)
+        {
+            return kiwi_getOption(inst, option);
+        }
+
+        public void setOption(int option, int value)
+        {
+            kiwi_setOption(inst, option, value);
         }
 
         /*

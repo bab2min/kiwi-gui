@@ -45,6 +45,7 @@
                 <ComboBoxItem>형태소 ( + 구분자)</ComboBoxItem>
                 <ComboBoxItem>형태소/NNG ( + 구분자)</ComboBoxItem>
             </ComboBox>
+            <CheckBox Name="IntegrateAllomorph" ToolTip="아/어, 았/었 등의 이형태를 통합할지 선택합니다." IsChecked="True">이형태 통합</CheckBox>
             <Button Name="StartBtn" Content="분석 시작" Padding="3" Click="StartBtn_Click" IsEnabled="False"/>
             <Button Name="StopBtn" Content="중단" Padding="3" Click="StopBtn_Click" Visibility="Collapsed"/>
             <TextBlock TextWrapping="Wrap">분석 결과는 <LineBreak/>"파일이름.tagged"에 저장됩니다.</TextBlock>

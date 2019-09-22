@@ -135,6 +135,7 @@ namespace KiwiGui
             App.monitor.TrackAtomicFeature("Kiwi_Menu", "Analyze", InputTxt.Text);
             string[] lines = TypeCmb.SelectedIndex == 0 ? InputTxt.Text.Trim().Split('\n') : new string[]{ InputTxt.Text.Trim() };
             int topN = TopNCmb.SelectedIndex + 1;
+            instKiwi.setOption(KiwiCS.KIWI_INTEGRATE_ALLOMORPH, IntegratedAllomorph.IsChecked.Value ? 1 : 0);
             Brush brushDef = new SolidColorBrush(Color.FromRgb(0, 0, 0));
             Brush brushMorph = new SolidColorBrush(Color.FromRgb(0, 150, 0));
             Brush brushTag = new SolidColorBrush(Color.FromRgb(0, 0, 150));
