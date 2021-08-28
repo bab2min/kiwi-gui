@@ -15,7 +15,7 @@ namespace KiwiGui
     /// </summary>
     public partial class MainWindow : Window
     {
-        KiwiCS instKiwi;
+        KiwiCS.Kiwi instKiwi;
         
         public MainWindow()
         {
@@ -25,14 +25,13 @@ namespace KiwiGui
             BackgroundWorker bw = new BackgroundWorker();
             bw.DoWork += (s, args) =>
             {
-                int version = KiwiCS.Version();
+                string version = KiwiCS.Kiwi.Version();
                 Dispatcher.Invoke(DispatcherPriority.Normal, new Action(()=>
                 {
-                    VersionInfo.Header = String.Format("Kiwi 버전 {0}.{1}.{2}", version / 100 % 10, version / 10 % 10, version % 10);
-                    Title += " v" + String.Format("{0}.{1}.{2}", version / 100 % 10, version / 10 % 10, version % 10);
+                    VersionInfo.Header = String.Format("Kiwi 버전 {0}", version);
+                    Title += " v" + version;
                 }));
-                instKiwi = new KiwiCS("model/", 0, 1);
-                instKiwi.prepare();
+                instKiwi = (new KiwiCS.KiwiBuilder("model/", 0, KiwiCS.Option.LoadDefaultDict)).Build();
             };
             bw.RunWorkerCompleted += (s, args) =>
             {
@@ -60,22 +59,6 @@ namespace KiwiGui
                 ftxt = File.ReadAllText(path, Encoding.Default);
             }
             return ftxt;
-        }
-
-        public void extractWords(string filePath)
-        {
-            using (StreamReader reader = new StreamReader(filePath, Encoding.UTF8, true))
-            {
-                KiwiCS.ExtractedWord[] res = instKiwi.extractWords((id)=>
-                {
-                    if (id == 0) reader.BaseStream.Seek(0, SeekOrigin.Begin);
-                    return reader.ReadLine();
-                });
-                foreach(var r in res)
-                {
-                    Console.Out.WriteLine(r.word);
-                }
-            }
         }
 
         private void MenuItem_Open(object sender, RoutedEventArgs e)
@@ -135,7 +118,7 @@ namespace KiwiGui
             App.monitor.TrackAtomicFeature("Kiwi_Menu", "Analyze", InputTxt.Text);
             string[] lines = TypeCmb.SelectedIndex == 0 ? InputTxt.Text.Trim().Split('\n') : new string[]{ InputTxt.Text.Trim() };
             int topN = TopNCmb.SelectedIndex + 1;
-            instKiwi.setOption(KiwiCS.KIWI_INTEGRATE_ALLOMORPH, IntegratedAllomorph.IsChecked.Value ? 1 : 0);
+            instKiwi.IntegrateAllomorph = IntegratedAllomorph.IsChecked.Value;
             Brush brushDef = new SolidColorBrush(Color.FromRgb(0, 0, 0));
             Brush brushMorph = new SolidColorBrush(Color.FromRgb(0, 150, 0));
             Brush brushTag = new SolidColorBrush(Color.FromRgb(0, 0, 150));
@@ -144,7 +127,7 @@ namespace KiwiGui
             {
                 if (line.Length == 0) continue;
                 content = true;
-                var res = instKiwi.analyze(line.Trim(), topN);
+                var res = instKiwi.Analyze(line.Trim(), topN, KiwiCS.Match.All);
                 Run t = new Run(line.Trim());
                 t.Foreground = brushDef;
                 Paragraph para = new Paragraph();
@@ -162,14 +145,14 @@ namespace KiwiGui
                             para.Inlines.Add(t);
                         }
                         Bold b = new Bold();
-                        b.Inlines.Add(m.Item1);
+                        b.Inlines.Add(m.form);
                         b.Foreground = brushMorph;
                         para.Inlines.Add(b);
                         t = new Run("/");
                         t.Foreground = brushDef;
                         para.Inlines.Add(t);
                         b = new Bold();
-                        b.Inlines.Add(m.Item2);
+                        b.Inlines.Add(m.tag);
                         b.Foreground = brushTag;
                         para.Inlines.Add(b);
                     }

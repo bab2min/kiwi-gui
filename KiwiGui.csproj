@@ -85,7 +85,6 @@
     <Compile Include="BatchDlg.xaml.cs">
       <DependentUpon>BatchDlg.xaml</DependentUpon>
     </Compile>
-    <Compile Include="KiwiCS.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -127,6 +126,12 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="src\" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="KiwiCS\KiwiCS.csproj">
+      <Project>{3f547421-5257-4342-8448-467ce85d9f61}</Project>
+      <Name>KiwiCS</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

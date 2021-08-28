@@ -1,9 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26430.16
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31424.327
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KiwiGui", "KiwiGui.csproj", "{C2EC5D3C-1C80-42B9-A726-ECB54CDCCFB4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KiwiCS", "KiwiCS\KiwiCS.csproj", "{3F547421-5257-4342-8448-467CE85D9F61}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnitTest", "test\UnitTest.csproj", "{A57B9DE7-7B53-486C-87F6-69B3534199B7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,8 +19,19 @@ Global
 		{C2EC5D3C-1C80-42B9-A726-ECB54CDCCFB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C2EC5D3C-1C80-42B9-A726-ECB54CDCCFB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C2EC5D3C-1C80-42B9-A726-ECB54CDCCFB4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3F547421-5257-4342-8448-467CE85D9F61}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3F547421-5257-4342-8448-467CE85D9F61}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3F547421-5257-4342-8448-467CE85D9F61}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3F547421-5257-4342-8448-467CE85D9F61}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A57B9DE7-7B53-486C-87F6-69B3534199B7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A57B9DE7-7B53-486C-87F6-69B3534199B7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A57B9DE7-7B53-486C-87F6-69B3534199B7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A57B9DE7-7B53-486C-87F6-69B3534199B7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {04DAF2F8-CDBD-4F7F-AA30-C612FC271220}
 	EndGlobalSection
 EndGlobal

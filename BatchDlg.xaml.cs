@@ -13,7 +13,7 @@ namespace KiwiGui
     /// </summary>
     public partial class BatchDlg : Window
     {
-        public KiwiCS instKiwi;
+        public KiwiCS.Kiwi instKiwi;
         private BackgroundWorker worker = new BackgroundWorker();
 
         protected struct WorkerArgs
@@ -65,21 +65,21 @@ namespace KiwiGui
         private void analyzeWriteResult(string input, WorkerArgs args, string outputPath)
         {
             string[] lines = args.byline ? input.Trim().Split('\n') : new string[] { input.Trim() };
-            instKiwi.setOption(KiwiCS.KIWI_INTEGRATE_ALLOMORPH, args.integrateAllomorph ? 1 : 0);
+            instKiwi.IntegrateAllomorph = args.integrateAllomorph;
             using (StreamWriter output = new StreamWriter(outputPath))
             {
                 foreach (string line in lines)
                 {
                     if (line.Length == 0) continue;
-                    var res = instKiwi.analyze(line.Trim(), args.topN);
+                    var res = instKiwi.Analyze(line.Trim(), args.topN, KiwiCS.Match.All);
                     string ret = "";
                     foreach(var r in res)
                     {
                         foreach(var m in r.morphs)
                         {
                             if (ret.Length > 0) ret += args.formatSep;
-                            ret += m.Item1;
-                            if (args.formatTag) ret += "/" + m.Item2;
+                            ret += m.form;
+                            if (args.formatTag) ret += "/" + m.tag;
                         }
                     }
                     output.WriteLine(line.Trim());
