@@ -1,9 +1,11 @@
 name: Publish Release assets
 
 on:
+  release:
+    types: [created]
   pull_request:
     branches: 
-      - main
+      - master
 
 jobs:
   build-windows:
