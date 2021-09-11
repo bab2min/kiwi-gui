@@ -16,7 +16,7 @@ jobs:
     - uses: actions/checkout@v1
       with:
         submodules: true
-    - run: echo "KIWI_VERSION=$(Get-Content .\.kiwiversion)" >> $GITHUB_ENV
+    - run: echo "KIWI_VERSION=$(Get-Content .\.kiwiversion)" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf-8 -Append
     - run: echo "KIWI_VERSION=$(Get-Content .\.kiwiversion)"
     - uses: robinraju/release-downloader@v1.2
       with:
