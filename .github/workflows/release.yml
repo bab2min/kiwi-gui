@@ -1,0 +1,65 @@
+name: Publish Release assets
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build-windows:
+    runs-on: windows-2019
+    name: windows-2019 x64
+
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+    - run: $env:KIWI_VERSION = Get-Content .\.kiwiversion
+    - uses: robinraju/release-downloader@v1.2
+      with:
+        repository: "bab2min/Kiwi"
+        tag: ${{ env.KIWI_VERSION }}
+        fileName: "kiwi_model_${{ env.KIWI_VERSION }}.tgz"
+    - uses: robinraju/release-downloader@v1.2
+      with:
+        repository: "bab2min/Kiwi"
+        tag: ${{ env.KIWI_VERSION }}
+        fileName: "kiwi_win_Win32_${{ env.KIWI_VERSION }}.zip"
+    - uses: robinraju/release-downloader@v1.2
+      with:
+        repository: "bab2min/Kiwi"
+        tag: ${{ env.KIWI_VERSION }}
+        fileName: "kiwi_win_x64_${{ env.KIWI_VERSION }}.zip"
+    - name: Get release
+      id: get_release
+      uses: bruceadams/get-release@v1.2.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+    - name: Add msbuild to PATH
+      uses: microsoft/setup-msbuild@v1.0.3
+    - name: Build
+      run: |
+        MSBuild.exe .\KiwiGui.sln /p:Configuration=Release
+    - name: Archive
+      run: |
+        mkdir artifacts
+        mkdir artifacts\model
+        mkdir artifacts\bin_x86
+        mkdir artifacts\bin_x64
+        mv bin\Release\*.exe artifacts\
+        mv bin\Release\*.dll artifacts\
+        Expand-Archive kiwi_win_Win32_${{ env.KIWI_VERSION }}.zip -DestinationPath x86
+        mv x86\kiwi.dll artifacts\bin_x86\kiwi_c.dll
+        Expand-Archive kiwi_win_x64_${{ env.KIWI_VERSION }}.zip -DestinationPath x64
+        mv x64\kiwi.dll artifacts\bin_x64\kiwi_c.dll
+        tar -zxvf kiwi_model_${{ env.KIWI_VERSION }}.tgz
+        mv ModelGenerator/* artifacts\model\
+        Compress-Archive -Path 'artifacts' -DestinationPath asset.zip
+    - name: Upload release binary
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+      with:
+        upload_url: ${{ steps.get_release.outputs.upload_url }}
+        asset_path: asset.zip
+        asset_name: kiwigui_win_${{ steps.get_release.outputs.tag_name }}.zip
+        asset_content_type: application/octet-stream

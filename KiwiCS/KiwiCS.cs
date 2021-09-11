@@ -118,20 +118,6 @@ namespace KiwiCS
             return LoadLibrary(path + subfolder + dll_name);
         }
 
-        /*static KiwiCAPI()
-        {
-            var myPath = new Uri(typeof(KiwiCAPI).Assembly.CodeBase).LocalPath;
-            var myFolder = Path.GetDirectoryName(myPath);
-
-            var is64 = IntPtr.Size == 8;
-            var subfolder = "\\bin_" + (is64 ? "x64\\" : "x86\\");
-#if DEBUG
-            myFolder += "\\..\\..";
-#endif
-
-            LoadLibrary(myFolder + subfolder + dll_name);
-        }*/
-
         [DllImport("kernel32.dll")]
         private static extern IntPtr LoadLibrary(string dllToLoad);
 
@@ -298,14 +284,22 @@ namespace KiwiCS
 
     public class KiwiLoader
     {
+        private static IntPtr dllHandle = IntPtr.Zero;
+        public static string GetDefaultPath()
+        {
+            var myPath = new Uri(typeof(KiwiCAPI).Assembly.CodeBase).LocalPath;
+            string path = Path.GetDirectoryName(myPath);
+            return path;
+        }
         public static bool LoadDll(string path = null)
         {
+            if (dllHandle != IntPtr.Zero) return true;
+
             if (path == null)
             {
-                var myPath = new Uri(typeof(KiwiCAPI).Assembly.CodeBase).LocalPath;
-                path = Path.GetDirectoryName(myPath);
+                path = GetDefaultPath();
             }
-            return KiwiCAPI.LoadDll(path) != IntPtr.Zero;
+            return (dllHandle = KiwiCAPI.LoadDll(path)) != IntPtr.Zero;
         }
     }
     public class KiwiBuilder
@@ -318,7 +312,9 @@ namespace KiwiCS
 
         static KiwiBuilder()
         {
-            KiwiLoader.LoadDll();
+            if (KiwiLoader.LoadDll()) return;
+            if (KiwiLoader.LoadDll(KiwiLoader.GetDefaultPath() + "\\..")) return;
+            if (KiwiLoader.LoadDll(KiwiLoader.GetDefaultPath() + "\\..\\..")) return;
         }
 
         private static KiwiCAPI.CReader readerInst = (int id, IntPtr buf, IntPtr userData) =>
@@ -403,6 +399,13 @@ namespace KiwiCS
         private Reader reader;
         private Receiver receiver;
         private Tuple<int, string> readItem;
+
+        static Kiwi()
+        {
+            if (KiwiLoader.LoadDll()) return;
+            if (KiwiLoader.LoadDll(KiwiLoader.GetDefaultPath() + "\\..")) return;
+            if (KiwiLoader.LoadDll(KiwiLoader.GetDefaultPath() + "\\..\\..")) return;
+        }
 
         private static KiwiCAPI.CReader readerInst = (int id, IntPtr buf, IntPtr userData) =>
         {
