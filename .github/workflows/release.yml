@@ -17,7 +17,7 @@ jobs:
       with:
         submodules: true
     - run: echo "KIWI_VERSION=$(Get-Content .\.kiwiversion)" >> $GITHUB_ENV
-    - run: echo ${{ env.KIWI_VERSION }}
+    - run: echo "${{ env.KIWI_VERSION }}"
     - uses: robinraju/release-downloader@v1.2
       with:
         repository: "bab2min/Kiwi"
