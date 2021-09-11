@@ -3,9 +3,6 @@ name: Publish Release assets
 on:
   release:
     types: [created]
-  pull_request:
-    branches: 
-      - master
 
 jobs:
   build-windows:
@@ -17,7 +14,6 @@ jobs:
       with:
         submodules: true
     - run: echo "KIWI_VERSION=$(Get-Content .\.kiwiversion)" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf-8 -Append
-    - run: echo "KIWI_VERSION=$(Get-Content .\.kiwiversion)"
     - uses: robinraju/release-downloader@v1.2
       with:
         repository: "bab2min/Kiwi"
@@ -42,7 +38,7 @@ jobs:
       uses: microsoft/setup-msbuild@v1.0.3
     - name: Build
       run: |
-        MSBuild.exe .\KiwiGui.sln /p:Configuration=Release
+        MSBuild.exe .\KiwiGui.csproj /p:Configuration=Release
     - name: Archive
       run: |
         mkdir artifacts
