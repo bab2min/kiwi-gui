@@ -13,7 +13,7 @@ jobs:
     - uses: actions/checkout@v1
       with:
         submodules: true
-    - run: $env:KIWI_VERSION = Get-Content .\.kiwiversion
+    - run: echo "KIWI_VERSION=$(Get-Content .\.kiwiversion)" >> $GITHUB_ENV
     - uses: robinraju/release-downloader@v1.2
       with:
         repository: "bab2min/Kiwi"
