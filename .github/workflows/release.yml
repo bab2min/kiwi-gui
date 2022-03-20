@@ -18,7 +18,7 @@ jobs:
       with:
         repository: "bab2min/Kiwi"
         tag: ${{ env.KIWI_VERSION }}
-        fileName: "kiwi_model_${{ env.KIWI_VERSION }}.tgz"
+        fileName: "kiwi_model_${{ env.KIWI_VERSION }}_base.tgz"
     - uses: robinraju/release-downloader@v1.2
       with:
         repository: "bab2min/Kiwi"
