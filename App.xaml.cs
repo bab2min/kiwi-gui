@@ -1,13 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Data;
 using System.Deployment.Application;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Windows;
 using GoogleAnalytics;
 
@@ -88,7 +86,6 @@ namespace KiwiGui
         }
     }
 
-
     /// <summary>
     /// Interaction logic for App.xaml
     /// </summary>
@@ -121,6 +118,7 @@ namespace KiwiGui
             eList.Reverse();
             App.monitor.TrackError(eList[0]);
             string errorMessage = "An unhandled exception occurred\n" + String.Join("\n", eList.Select(ex => ex.Message));
+            MessageBox.Show(errorMessage, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             MessageBox.Show(errorMessage, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

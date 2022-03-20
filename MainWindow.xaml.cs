@@ -2,53 +2,143 @@
 using System;
 using System.Text;
 using System.Windows;
-using System.Windows.Documents;
 using System.Windows.Media;
 using System.IO;
 using System.ComponentModel;
+using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.Windows.Threading;
+using System.Windows.Controls;
+using System.Windows.Documents;
 
 namespace KiwiGui
 {
+    public class RichTextBoxHelper : DependencyObject
+    {
+        public static List<List<KiwiCS.Token>> GetDocumentKiwiToken(DependencyObject obj)
+        {
+            return (List<List<KiwiCS.Token>>)obj.GetValue(DocumentKiwiTokenProperty);
+        }
+
+        public static void SetDocumentKiwiToken(DependencyObject obj, List<List<KiwiCS.Token>> value)
+        {
+            obj.SetValue(DocumentKiwiTokenProperty, value);
+        }
+
+        public static readonly DependencyProperty DocumentKiwiTokenProperty = DependencyProperty.RegisterAttached(
+            "DocumentKiwiToken",
+            typeof(List<List<KiwiCS.Token>>),
+            typeof(RichTextBoxHelper),
+            new FrameworkPropertyMetadata
+            {
+                BindsTwoWayByDefault = true,
+                PropertyChangedCallback = (obj, e) =>
+                {
+                    Brush brushDef = new SolidColorBrush(Color.FromRgb(0, 0, 0));
+                    Brush brushMorph = new SolidColorBrush(Color.FromRgb(0, 150, 0));
+                    Brush brushTag = new SolidColorBrush(Color.FromRgb(0, 0, 150));
+
+                    var richTextBox = (RichTextBox)obj;
+                    var items = (List<List<KiwiCS.Token>>)richTextBox.GetValue(DocumentKiwiTokenProperty);
+                    var doc = new FlowDocument();
+
+                    Run t;
+                    Paragraph para = new Paragraph();
+                    foreach (var item in items)
+                    {
+                        int c = 0;
+                        if (para.Inlines.Count > 0)
+                        {
+                            para.Inlines.Add(new LineBreak());
+                            para.Inlines.Add(new LineBreak());
+                        }
+
+                        foreach (var m in item)
+                        {
+                            if (c++ > 0)
+                            {
+                                t = new Run(" + ");
+                                t.Foreground = brushDef;
+                                para.Inlines.Add(t);
+                            }
+                            Bold b = new Bold();
+                            b.Inlines.Add(m.form);
+                            b.Foreground = brushMorph;
+                            para.Inlines.Add(b);
+                            t = new Run("/");
+                            t.Foreground = brushDef;
+                            para.Inlines.Add(t);
+                            b = new Bold();
+                            b.Inlines.Add(m.tag);
+                            b.Foreground = brushTag;
+                            para.Inlines.Add(b);
+                        }
+                    }
+                    doc.Blocks.Add(para);
+
+                    richTextBox.Document = doc;
+                }
+            }
+        );
+    }
+
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
     public partial class MainWindow : Window
     {
         KiwiCS.Kiwi instKiwi;
-        
+        ObservableCollection<AnalyzeResult> resultData;
+
+        private class AnalyzeResult
+        {
+            public int Id { get; set; }
+            public string Input { get; set; }
+            public List<List<KiwiCS.Token>> Result { get; set; }
+
+            public AnalyzeResult(int Id, string Input, List<List<KiwiCS.Token>> Result)
+            {
+                this.Id = Id;
+                this.Input = Input;
+                this.Result = Result;
+            }
+
+            public AnalyzeResult(int Id, string Input, List<KiwiCS.Token> Result)
+            {
+                this.Id = Id;
+                this.Input = Input;
+                this.Result = new List<List<KiwiCS.Token>>();
+                this.Result.Add(Result);
+            }
+        }
+
         public MainWindow()
         {
             InitializeComponent();
-            Splash splashScreen = new Splash();
-            splashScreen.Show();
-            BackgroundWorker bw = new BackgroundWorker();
-            bw.DoWork += (s, args) =>
+        }
+
+        private void Window_Initialized(object sender, EventArgs e)
+        {
+            try
             {
                 string version = KiwiCS.Kiwi.Version();
-                Dispatcher.Invoke(DispatcherPriority.Normal, new Action(()=>
-                {
-                    VersionInfo.Header = String.Format("Kiwi 버전 {0}", version);
-                    Title += " v" + version;
-                }));
+                VersionInfo.Header = String.Format("Kiwi 버전 {0}", version);
+                Title += " v" + version;
                 instKiwi = (new KiwiCS.KiwiBuilder("model/", 0, KiwiCS.Option.LoadDefaultDict)).Build();
-            };
-            bw.RunWorkerCompleted += (s, args) =>
+                ResultBlock.DataContext = resultData = new ObservableCollection<AnalyzeResult>();
+            }
+            catch (Exception ex)
             {
-                splashScreen.Close();
-                if (args.Error != null)
-                {
-                    MessageBox.Show(this, "Kiwi 형태소 분석기를 초기화하는 데 실패했습니다. 모델 파일이 없거나 인자가 잘못되었습니다.\n오류 메세지: "
-                    + args.Error.Message, "Kiwi 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-                    Close();
-                    return;
-                }
-                Show();
-            };
-            bw.RunWorkerAsync();
-            
-            App.monitor.TrackScreenView("Kiwi_MainWindow");
-            Hide();
+                MessageBox.Show(this, "Kiwi 형태소 분석기를 초기화하는 데 실패했습니다. 모델 파일이 없거나 인자가 잘못되었습니다.\n오류 메세지: "
+                    + ex.Message, "Kiwi 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(this, "Kiwi 형태소 분석기를 초기화하는 데 실패했습니다. 모델 파일이 없거나 인자가 잘못되었습니다.\n오류 메세지: "
+                    + ex.Message, "Kiwi 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                Close();
+            }
+        }
+
+        private void Window_Closed(object sender, EventArgs e)
+        {
         }
 
         public static string GetFileText(string path)
@@ -79,7 +169,24 @@ namespace KiwiGui
             ofd.Title = "분석 결과를 저장할 파일 경로";
 
             if (ofd.ShowDialog() != true) return;
-            string res = new TextRange(ResultBlock.Document.ContentStart, ResultBlock.Document.ContentEnd).Text;
+            string res = "";
+            foreach(var r in resultData)
+            {
+                res += r.Input;
+                res += "\n";
+                int c = 0;
+                foreach(var l in r.Result)
+                {
+                    if (c++ > 0) res += "\n";
+                    int d = 0;
+                    foreach(var m in l)
+                    {
+                        if(d++ > 0) res += " + ";
+                        res += m.form + "/" + m.tag;
+                    }
+                }
+                res += "\n\n";
+            }
             File.WriteAllText(ofd.FileName, res);
             App.monitor.TrackAtomicFeature("Kiwi_Menu", "Save", res);
         }
@@ -112,59 +219,183 @@ namespace KiwiGui
             System.Diagnostics.Process.Start("http://bab2min.tistory.com/category/%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%98%EB%B0%8D/NLP");
         }
 
-        private void AnalyzeBtn_Click(object sender, RoutedEventArgs e)
+        private IEnumerable<AnalyzeResult> AnalyzeText(string text, int mode, KiwiCS.Match match, int topN = 1)
         {
-            ResultBlock.Document.Blocks.Clear();
-            App.monitor.TrackAtomicFeature("Kiwi_Menu", "Analyze", InputTxt.Text);
-            string[] lines = TypeCmb.SelectedIndex == 0 ? InputTxt.Text.Trim().Split('\n') : new string[]{ InputTxt.Text.Trim() };
-            int topN = TopNCmb.SelectedIndex + 1;
-            instKiwi.IntegrateAllomorph = IntegratedAllomorph.IsChecked.Value;
-            Brush brushDef = new SolidColorBrush(Color.FromRgb(0, 0, 0));
-            Brush brushMorph = new SolidColorBrush(Color.FromRgb(0, 150, 0));
-            Brush brushTag = new SolidColorBrush(Color.FromRgb(0, 0, 150));
-            bool content = false;
-            foreach (var line in lines)
+            if (mode == 2)
             {
-                if (line.Length == 0) continue;
-                content = true;
-                var res = instKiwi.Analyze(line.Trim(), topN, KiwiCS.Match.All);
-                Run t = new Run(line.Trim());
-                t.Foreground = brushDef;
-                Paragraph para = new Paragraph();
-                para.Inlines.Add(t);
+                int rid = 0;
+                foreach(var line in text.Trim().Split('\n'))
+                {
+                    var trimmed = line.Trim();
+                    var res = instKiwi.Analyze(trimmed, topN, match);
+                    List<List<KiwiCS.Token>> s = new List<List<KiwiCS.Token>>();
+                    foreach (var r in res)
+                    {
+                        if (r.morphs.Length == 0) continue;
+                        s.Add(new List<KiwiCS.Token>(r.morphs));
+                    }
+                    if (trimmed.Length == 0) continue;
+
+                    yield return new AnalyzeResult(++rid, trimmed, s);
+                }
+            }
+            else if(mode == 3)
+            {
+                var res = instKiwi.Analyze(text, topN, match);
+                List<List<KiwiCS.Token>> s = new List<List<KiwiCS.Token>>();
                 foreach (var r in res)
                 {
-                    para.Inlines.Add(new LineBreak());
-                    int c = 0;
-                    foreach (var m in r.morphs)
-                    {
-                        if (c++ > 0)
-                        {
-                            t = new Run(" + ");
-                            t.Foreground = brushDef;
-                            para.Inlines.Add(t);
-                        }
-                        Bold b = new Bold();
-                        b.Inlines.Add(m.form);
-                        b.Foreground = brushMorph;
-                        para.Inlines.Add(b);
-                        t = new Run("/");
-                        t.Foreground = brushDef;
-                        para.Inlines.Add(t);
-                        b = new Bold();
-                        b.Inlines.Add(m.tag);
-                        b.Foreground = brushTag;
-                        para.Inlines.Add(b);
-                    }
+                    if (r.morphs.Length == 0) continue;
+                    s.Add(new List<KiwiCS.Token>(r.morphs));
                 }
-                ResultBlock.Document.Blocks.Add(para);
+                yield return new AnalyzeResult(1, text.Trim(), s);
             }
-            MenuSave.IsEnabled = content;
-        }
+            else
+            {
+                var r = instKiwi.Analyze(text, 1, match)[0];
+                int wp = 0, sp = 0, cp = 0, rid = 0, c = 0;
+                List<KiwiCS.Token> s = new List<KiwiCS.Token>();
+                
+                foreach (var m in r.morphs)
+                {
+                    if(mode == 0 ? (wp != m.wordPosition || sp != m.sentPosition) : (sp != m.sentPosition) )
+                    {
+                        yield return new AnalyzeResult(++rid, text.Substring(cp, m.position - cp).Trim(), s);
+                        cp = m.position;
+                        c = 0;
+                        s = new List<KiwiCS.Token>();
+                    }
+                    s.Add(m);
+                    wp = m.wordPosition;
+                    sp = m.sentPosition;
+                }
 
-        private void Window_Closed(object sender, EventArgs e)
+                if (s.Count > 0)
+                {
+                    yield return new AnalyzeResult(++rid, text.Substring(cp), s);
+                }
+            }
+        }
+        private void UpdateAnalyzeResult()
         {
+            if (InputTxt == null || ResultBlock == null) return;
+            //ResultBlock.Document.Blocks.Clear();
+
+            resultData.Clear();
+
+            App.monitor.TrackAtomicFeature("Kiwi_Menu", "Analyze", InputTxt.Text);
+            string[] lines = TypeCmb.SelectedIndex == 1 ? InputTxt.Text.Trim().Split('\n') : new string[] { InputTxt.Text.Trim() };
+            int topN = TopNCmb.SelectedIndex + 1;
+            instKiwi.IntegrateAllomorph = IntegratedAllomorph.IsChecked.Value;
+            
+            KiwiCS.Match match = 0;
+            if (NormalizeCoda.IsChecked.Value) match |= KiwiCS.Match.NormalizeCoda;
+            if (MatchUrl.IsChecked.Value) match |= KiwiCS.Match.Url;
+            if (MatchEmail.IsChecked.Value) match |= KiwiCS.Match.Email;
+            if (MatchHashtag.IsChecked.Value) match |= KiwiCS.Match.Hashtag;
+            if (MatchMention.IsChecked.Value) match |= KiwiCS.Match.Mention;
+            if (JoinNounPrefix.IsChecked.Value) match |= KiwiCS.Match.JoinNounPrefix;
+            if (JoinNounSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinNounSuffix;
+            if (JoinVerbSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinVerbSuffix;
+            if (JoinAdjSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinAdjSuffix;
+
+            bool hasContent = false;
+            foreach(var r in AnalyzeText(InputTxt.Text, TypeCmb.SelectedIndex, match, topN))
+            {
+                hasContent = true;
+                resultData.Add(r);
+            }
+            MenuSave.IsEnabled = hasContent;
+        }
+        private void AnalyzeBtn_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateAnalyzeResult();
         }
 
+        private void IntegratedAllomorph_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void NormalizeCoda_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void MatchUrl_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void MatchEmail_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void MatchHashtag_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void MatchMention_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void JoinNounPrefix_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void JoinNounSuffix_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void JoinVerbSuffix_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void JoinAdjSuffix_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void TypeCmb_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
+
+        private void MenuItem_Wrap_Checked(object sender, RoutedEventArgs e)
+        {
+            if (InputTxt == null) return;
+            InputTxt.HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Hidden;
+            InputTxt.TextWrapping = TextWrapping.Wrap;
+        }
+
+        private void MenuItem_Wrap_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (InputTxt == null) return;
+            InputTxt.HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto;
+            InputTxt.TextWrapping = TextWrapping.NoWrap;
+        }
+
+        private void ResultBlock_CellEditEnding(object sender, System.Windows.Controls.DataGridCellEditEndingEventArgs e)
+        {
+            e.Cancel = true;
+        }
     }
+
 }
