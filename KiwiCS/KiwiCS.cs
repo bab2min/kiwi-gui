@@ -94,6 +94,8 @@ namespace KiwiCS
         public string tag;
         public int position;
         public int length;
+        public int wordPosition;
+        public int sentPosition;
     }
     public struct Result
     {
@@ -210,6 +212,12 @@ namespace KiwiCS
         public static extern int kiwi_res_length(KiwiResHandle result, int index, int num);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_res_word_position(KiwiResHandle result, int index, int num);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_res_sent_position(KiwiResHandle result, int index, int num);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_res_close(KiwiResHandle result);
 
         // word management functions
@@ -246,6 +254,8 @@ namespace KiwiCS
                     ret[i].morphs[j].tag = Marshal.PtrToStringUni(kiwi_res_tag_w(kiwiresult, i, j));
                     ret[i].morphs[j].position = kiwi_res_position(kiwiresult, i, j);
                     ret[i].morphs[j].length = kiwi_res_length(kiwiresult, i, j);
+                    ret[i].morphs[j].wordPosition = kiwi_res_word_position(kiwiresult, i, j);
+                    ret[i].morphs[j].sentPosition = kiwi_res_sent_position(kiwiresult, i, j);
                 }
                 ret[i].prob = kiwi_res_prob(kiwiresult, i);
             }
@@ -269,17 +279,24 @@ namespace KiwiCS
     }
     public enum Option
     {
-        LoadDefaultDict = 1,
-        IntegrateAllomorph = 2
+        IntegrateAllomorph = 1 << 0,
+        LoadDefaultDict = 1 << 1,
     }
 
     public enum Match
     {
-        Url = 1,
-        Email = 2,
-        Hashtag = 4,
-        Mention = 8,
-        All = 15,
+        Url = 1 << 0,
+        Email = 1 << 1,
+        Hashtag = 1 << 2,
+        Mention = 1 << 3,
+        All = Url | Email | Hashtag | Mention,
+
+        NormalizeCoda = 1 << 16,
+
+        JoinNounPrefix = 1 << 17,
+        JoinNounSuffix = 1 << 18,
+        JoinVerbSuffix = 1 << 19,
+        JoinAdjSuffix = 1 << 20,
     }
 
     public class KiwiLoader
