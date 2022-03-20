@@ -1,6 +1,6 @@
 # 일반 사용자용 KiwiGui
 Windows 환경에서 손쉽게 형태소 분석기를 사용할 수 있도록 제공하는 GUI 프로그램입니다.
-최신 버전은 https://github.com/bab2min/kiwi-gui/releases/download/ 에서 다운받을 수 있습니다.
+최신 버전은 https://github.com/bab2min/kiwi-gui/releases/ 에서 다운받을 수 있습니다.
 
 # Kiwi C#용 API
 Windows 환경에서 사용할 수 있는 C# API 또한 제공합니다. 
