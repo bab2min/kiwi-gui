@@ -8,3 +8,6 @@ C# API는 Windows에서 사용할 수 있는 KiwiC.dll을 래핑하는 방식으
 따라서 Windows 외의 환경에서는 작동이 어렵다는 점 참고하시길 바랍니다.
 
 자세한 사용법에 대해서는 https://github.com/bab2min/kiwi-gui/blob/master/KiwiCS/KiwiCS.cs 를 참조하시길 바랍니다.
+
+# 인용하기
+인용방법에 대해서는 [Kiwi#인용하기](https://github.com/bab2min/Kiwi#%EC%9D%B8%EC%9A%A9%ED%95%98%EA%B8%B0)를 참조해주세요.
