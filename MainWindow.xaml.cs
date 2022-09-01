@@ -88,6 +88,8 @@ namespace KiwiGui
     public partial class MainWindow : Window
     {
         KiwiCS.Kiwi instKiwi;
+        KiwiCS.ModelType modelType = KiwiCS.ModelType.SBG;
+        bool useTypoCorrection = false;
         ObservableCollection<AnalyzeResult> resultData;
 
         private class AnalyzeResult
@@ -124,7 +126,15 @@ namespace KiwiGui
                 string version = KiwiCS.Kiwi.Version();
                 VersionInfo.Header = String.Format("Kiwi 버전 {0}", version);
                 Title += " v" + version;
-                instKiwi = (new KiwiCS.KiwiBuilder("model/", 0, KiwiCS.Option.LoadDefaultDict)).Build();
+                var builder = new KiwiCS.KiwiBuilder("model/", 0, KiwiCS.Option.LoadDefaultDict | KiwiCS.Option.LoadTypoDict, modelType);
+                if (useTypoCorrection)
+                {
+                    instKiwi = builder.Build(new KiwiCS.TypoTransformer(true));
+                }
+                else
+                {
+                    instKiwi = builder.Build();
+                }
                 ResultBlock.DataContext = resultData = new ObservableCollection<AnalyzeResult>();
             }
             catch (Exception ex)
@@ -134,6 +144,19 @@ namespace KiwiGui
                 MessageBox.Show(this, "Kiwi 형태소 분석기를 초기화하는 데 실패했습니다. 모델 파일이 없거나 인자가 잘못되었습니다.\n오류 메세지: "
                     + ex.Message, "Kiwi 오류", MessageBoxButton.OK, MessageBoxImage.Error);
                 Close();
+            }
+        }
+
+        private void UpdateKiwiModel()
+        {
+            var builder = new KiwiCS.KiwiBuilder("model/", 0, KiwiCS.Option.LoadDefaultDict | KiwiCS.Option.LoadTypoDict, modelType);
+            if (useTypoCorrection)
+            {
+                instKiwi = builder.Build(new KiwiCS.TypoTransformer(true));
+            }
+            else
+            {
+                instKiwi = builder.Build();
             }
         }
 
@@ -260,14 +283,14 @@ namespace KiwiGui
                 {
                     if(mode == 0 ? (wp != m.wordPosition || sp != m.sentPosition) : (sp != m.sentPosition) )
                     {
-                        yield return new AnalyzeResult(++rid, text.Substring(cp, m.position - cp).Trim(), s);
-                        cp = m.position;
+                        yield return new AnalyzeResult(++rid, text.Substring(cp, (int)m.chrPosition - cp).Trim(), s);
+                        cp = (int)m.chrPosition;
                         c = 0;
                         s = new List<KiwiCS.Token>();
                     }
                     s.Add(m);
-                    wp = m.wordPosition;
-                    sp = m.sentPosition;
+                    wp = (int)m.wordPosition;
+                    sp = (int)m.sentPosition;
                 }
 
                 if (s.Count > 0)
@@ -294,6 +317,7 @@ namespace KiwiGui
             if (MatchEmail.IsChecked.Value) match |= KiwiCS.Match.Email;
             if (MatchHashtag.IsChecked.Value) match |= KiwiCS.Match.Hashtag;
             if (MatchMention.IsChecked.Value) match |= KiwiCS.Match.Mention;
+            if (MatchSerial.IsChecked.Value) match |= KiwiCS.Match.Serial;
             if (JoinNounPrefix.IsChecked.Value) match |= KiwiCS.Match.JoinNounPrefix;
             if (JoinNounSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinNounSuffix;
             if (JoinVerbSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinVerbSuffix;
@@ -347,6 +371,11 @@ namespace KiwiGui
             if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
             UpdateAnalyzeResult();
         }
+        private void MatchSerial_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
+            UpdateAnalyzeResult();
+        }
 
         private void JoinNounPrefix_Checked(object sender, RoutedEventArgs e)
         {
@@ -396,6 +425,45 @@ namespace KiwiGui
         {
             e.Cancel = true;
         }
+
+        private void MenuKNLM_Checked(object sender, RoutedEventArgs e)
+        {
+            if (InputTxt == null) return;
+            if (modelType == KiwiCS.ModelType.KNLM) return;
+            MenuKNLM.IsChecked = true;
+            MenuSBG.IsChecked = false;
+            modelType = KiwiCS.ModelType.KNLM;
+            UpdateKiwiModel();
+            UpdateAnalyzeResult();
+        }
+
+        private void MenuSBG_Checked(object sender, RoutedEventArgs e)
+        {
+            if (InputTxt == null) return;
+            if (modelType == KiwiCS.ModelType.SBG) return;
+            MenuKNLM.IsChecked = false;
+            MenuSBG.IsChecked = true;
+            modelType = KiwiCS.ModelType.SBG;
+            UpdateKiwiModel();
+            UpdateAnalyzeResult();
+        }
+
+        private void MenuTypo_Checked(object sender, RoutedEventArgs e)
+        {
+            if (InputTxt == null) return;
+            useTypoCorrection = true;
+            UpdateKiwiModel();
+            UpdateAnalyzeResult();
+        }
+
+        private void MenuTypo_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (InputTxt == null) return;
+            useTypoCorrection = false;
+            UpdateKiwiModel();
+            UpdateAnalyzeResult();
+        }
+
     }
 
 }
