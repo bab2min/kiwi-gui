@@ -48,9 +48,9 @@ jobs:
         mv bin\Release\*.exe KiwiGui_Windows\
         mv bin\Release\*.dll KiwiGui_Windows\
         Expand-Archive kiwi_win_Win32_${{ env.KIWI_VERSION }}.zip -DestinationPath x86
-        mv x86\kiwi.dll KiwiGui_Windows\bin_x86\
+        mv x86\lib\kiwi.dll KiwiGui_Windows\bin_x86\
         Expand-Archive kiwi_win_x64_${{ env.KIWI_VERSION }}.zip -DestinationPath x64
-        mv x64\kiwi.dll KiwiGui_Windows\bin_x64\
+        mv x64\lib\kiwi.dll KiwiGui_Windows\bin_x64\
         tar -zxvf kiwi_model_${{ env.KIWI_VERSION }}_base.tgz
         mv ModelGenerator/* KiwiGui_Windows\model\
         Compress-Archive -Path 'KiwiGui_Windows' -DestinationPath asset.zip
