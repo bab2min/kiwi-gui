@@ -11,6 +11,8 @@ namespace KiwiCS
     using KiwiBuilderHandle = IntPtr;
     using KiwiResHandle = IntPtr;
     using KiwiWsHandle = IntPtr;
+    using KiwiTypoHandle = IntPtr;
+    using KiwiJoinerHandle = IntPtr;
     internal class Utf8String : IDisposable
     {
         IntPtr iPtr;
@@ -73,6 +75,52 @@ namespace KiwiCS
             }
         }
     }
+
+    internal class Utf8StringArray : IDisposable
+    {
+        
+        IntPtr iPtr, bPtr;
+        public IntPtr IntPtr { get { return bPtr; } }
+        
+        public Utf8StringArray(string[] aValue)
+        {
+            if (aValue == null)
+            {
+                iPtr = IntPtr.Zero;
+            }
+            else
+            {
+                int totalLength = 0;
+                byte[][] pool = new byte[aValue.Length][];
+                for (int i = 0; i < aValue.Length; i++)
+                {
+                    pool[i] = Encoding.UTF8.GetBytes(aValue[i]);
+                    totalLength += pool[i].Length + 1;
+                }
+                iPtr = Marshal.AllocHGlobal(totalLength);
+                bPtr = Marshal.AllocHGlobal(IntPtr.Size * pool.Length);
+
+                int offset = 0;
+                for (int i = 0; i < aValue.Length; i++)
+                {
+                    Marshal.Copy(pool[i], 0, iPtr + offset, pool[i].Length);
+                    Marshal.WriteByte(iPtr, pool[i].Length, 0);
+                    Marshal.WriteIntPtr(bPtr, IntPtr.Size * i, iPtr + offset);
+                    offset += pool[i].Length + 1;
+                }
+            }
+        }
+        public void Dispose()
+        {
+            if (iPtr != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(iPtr);
+                Marshal.FreeHGlobal(bPtr);
+                iPtr = IntPtr.Zero;
+                bPtr = IntPtr.Zero;
+            }
+        }
+    }
     public class KiwiException : Exception
     {
         public KiwiException()
@@ -88,15 +136,6 @@ namespace KiwiCS
         }
     }
 
-    public struct Token
-    {
-        public string form;
-        public string tag;
-        public int position;
-        public int length;
-        public int wordPosition;
-        public int sentPosition;
-    }
     public struct Result
     {
         public Token[] morphs;
@@ -118,6 +157,23 @@ namespace KiwiCS
             var is64 = IntPtr.Size == 8;
             var subfolder = "\\bin_" + (is64 ? "x64\\" : "x86\\");
             return LoadLibrary(path + subfolder + dll_name);
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct TokenInfo
+        {
+            public uint chrPosition; /* 시작 위치(UTF16 문자 기준) */
+            public uint wordPosition; /* 어절 번호(공백 기준)*/
+            public uint sentPosition; /* 문장 번호*/
+            public uint lineNumber; /* 줄 번호*/
+            public ushort length; /* 길이(UTF16 문자 기준) */
+            public byte _tag; /* 품사 태그 */
+            public byte senseId; /* 의미 번호 */
+            public float score; /* 해당 형태소의 언어모델 점수 */
+            public float typoCost; /* 오타가 교정된 경우 오타 비용. 그렇지 않은 경우 0 */
+            public uint typoFormId; /* 교정 전 오타의 형태에 대한 정보 (typoCost가 0인 경우 의미 없음) */
+            public uint pairedToken; /* SSO, SSC 태그에 속하는 형태소의 경우 쌍을 이루는 반대쪽 형태소의 위치(-1인 경우 해당하는 형태소가 없는 것을 뜻함) */
+            public uint subSentPosition; /* 인용부호나 괄호로 둘러싸인 하위 문장의 번호. 1부터 시작. 0인 경우 하위 문장이 아님을 뜻함 */
         }
 
         [DllImport("kernel32.dll")]
@@ -159,7 +215,7 @@ namespace KiwiCS
         public static extern KiwiWsHandle kiwi_builder_extract_add_words_w(KiwiBuilderHandle handle, CReader reader, IntPtr userData, int minCnt, int maxWordLen, float minScore, float posThreshold);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern KiwiHandle kiwi_builder_build(KiwiBuilderHandle handle);
+        public static extern KiwiHandle kiwi_builder_build(KiwiBuilderHandle handle, KiwiTypoHandle typos, float typo_cost_threshold);
 
         // analyzer functions
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
@@ -167,6 +223,12 @@ namespace KiwiCS
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern void kiwi_set_option(KiwiHandle handle, int option, int value);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern float kiwi_get_option_f(KiwiHandle handle, int option);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void kiwi_set_option_f(KiwiHandle handle, int option, float value);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern KiwiResHandle kiwi_analyze_w(KiwiHandle handle, IntPtr text, int topN, int matchOptions);
@@ -218,6 +280,9 @@ namespace KiwiCS
         public static extern int kiwi_res_sent_position(KiwiResHandle result, int index, int num);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern ref TokenInfo kiwi_res_token_info(KiwiResHandle result, int index, int num);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_res_close(KiwiResHandle result);
 
         // word management functions
@@ -239,6 +304,32 @@ namespace KiwiCS
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_ws_close(KiwiWsHandle result);
 
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiTypoHandle kiwi_typo_init();
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiTypoHandle kiwi_typo_get_basic();
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_typo_add(KiwiTypoHandle typo, IntPtr orig, int origSize, IntPtr error, int errorSize, float cost, int condition);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_typo_close(KiwiTypoHandle typo);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiJoinerHandle kiwi_new_joiner(KiwiHandle handle, int lmSearch);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_joiner_add(KiwiJoinerHandle handle, CString form, CString tag, int option);
+        
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern CString kiwi_joiner_get(KiwiJoinerHandle handle);
+        
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern CString kiwi_joiner_get_w(KiwiJoinerHandle handle);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_joiner_close(KiwiJoinerHandle handle);
         public static Result[] ToResult(KiwiResHandle kiwiresult)
         {
             int resCount = kiwi_res_size(kiwiresult);
@@ -252,10 +343,19 @@ namespace KiwiCS
                 {
                     ret[i].morphs[j].form = Marshal.PtrToStringUni(kiwi_res_form_w(kiwiresult, i, j));
                     ret[i].morphs[j].tag = Marshal.PtrToStringUni(kiwi_res_tag_w(kiwiresult, i, j));
-                    ret[i].morphs[j].position = kiwi_res_position(kiwiresult, i, j);
-                    ret[i].morphs[j].length = kiwi_res_length(kiwiresult, i, j);
-                    ret[i].morphs[j].wordPosition = kiwi_res_word_position(kiwiresult, i, j);
-                    ret[i].morphs[j].sentPosition = kiwi_res_sent_position(kiwiresult, i, j);
+                    
+                    var ti = kiwi_res_token_info(kiwiresult, i, j);
+                    ret[i].morphs[j].chrPosition = ti.chrPosition;
+                    ret[i].morphs[j].wordPosition = ti.wordPosition;
+                    ret[i].morphs[j].sentPosition = ti.sentPosition;
+                    ret[i].morphs[j].lineNumber = ti.lineNumber;
+                    ret[i].morphs[j].length = ti.length;
+                    ret[i].morphs[j].senseId = ti.senseId;
+                    ret[i].morphs[j].score = ti.score;
+                    ret[i].morphs[j].typoCost = ti.typoCost;
+                    ret[i].morphs[j].typoFormId = ti.typoFormId;
+                    ret[i].morphs[j].pairedToken = ti.pairedToken;
+                    ret[i].morphs[j].subSentPosition = ti.subSentPosition;
                 }
                 ret[i].prob = kiwi_res_prob(kiwiresult, i);
             }
@@ -277,10 +377,42 @@ namespace KiwiCS
             return ret;
         }
     }
+
+    public struct Token
+    {
+        public string form;
+        public string tag;
+        public uint chrPosition; /* 시작 위치(UTF16 문자 기준) */
+        public uint wordPosition; /* 어절 번호(공백 기준)*/
+        public uint sentPosition; /* 문장 번호*/
+        public uint lineNumber; /* 줄 번호*/
+        public ushort length; /* 길이(UTF16 문자 기준) */
+        public byte senseId; /* 의미 번호 */
+        public float score; /* 해당 형태소의 언어모델 점수 */
+        public float typoCost; /* 오타가 교정된 경우 오타 비용. 그렇지 않은 경우 0 */
+        public uint typoFormId; /* 교정 전 오타의 형태에 대한 정보 (typoCost가 0인 경우 의미 없음) */
+        public uint pairedToken; /* SSO, SSC 태그에 속하는 형태소의 경우 쌍을 이루는 반대쪽 형태소의 위치(-1인 경우 해당하는 형태소가 없는 것을 뜻함) */
+        public uint subSentPosition; /* 인용부호나 괄호로 둘러싸인 하위 문장의 번호. 1부터 시작. 0인 경우 하위 문장이 아님을 뜻함 */
+    }
+
     public enum Option
     {
         IntegrateAllomorph = 1 << 0,
         LoadDefaultDict = 1 << 1,
+        LoadTypoDict = 1 << 2,
+        MaxUnkFormSize = 0x8002,
+        SpaceTolerance = 0x8003,
+        CutOffThreshold = 0x9001,
+        UnkFormScoreScale = 0x9002,
+        UnkFormScoreBias = 0x9003,
+        SpacePenalty = 0x9004,
+        TypoCostWeight = 0x9005,
+    }
+
+    public enum ModelType
+    {
+        KNLM = 0x0000,
+        SBG = 0x0100,
     }
 
     public enum Match
@@ -289,7 +421,8 @@ namespace KiwiCS
         Email = 1 << 1,
         Hashtag = 1 << 2,
         Mention = 1 << 3,
-        All = Url | Email | Hashtag | Mention,
+        Serial = 1 << 4,
+        All = Url | Email | Hashtag | Mention | Serial,
 
         NormalizeCoda = 1 << 16,
 
@@ -319,6 +452,34 @@ namespace KiwiCS
             return (dllHandle = KiwiCAPI.LoadDll(path)) != IntPtr.Zero;
         }
     }
+
+    public class TypoTransformer
+    {
+        public KiwiTypoHandle inst; 
+
+        public TypoTransformer(bool useBasicSet = false)
+        {
+            inst = useBasicSet ? KiwiCAPI.kiwi_typo_get_basic() : KiwiCAPI.kiwi_typo_init();
+        }
+
+        public int Add(string[] orig, string[] error, float cost, int condition)
+        {
+            if (inst == KiwiCAPI.kiwi_typo_get_basic())
+            {
+                throw new InvalidOperationException("basic typo object cannot be modified!");
+            }
+            return KiwiCAPI.kiwi_typo_add(inst, new Utf8StringArray(orig).IntPtr, orig.Length, new Utf8StringArray(error).IntPtr, error.Length, cost, condition);
+        }
+
+        ~TypoTransformer()
+        {
+            if (inst != null && inst != KiwiCAPI.kiwi_typo_get_basic())
+            {
+                KiwiCAPI.kiwi_typo_close(inst);
+            }
+        }
+    }
+
     public class KiwiBuilder
     {
         public delegate string Reader(int id);
@@ -350,9 +511,9 @@ namespace KiwiCS
             return 0;
         };
 
-        public KiwiBuilder(string modelPath, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.IntegrateAllomorph)
+        public KiwiBuilder(string modelPath, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.IntegrateAllomorph, ModelType modelType = ModelType.KNLM)
         {
-            inst = KiwiCAPI.kiwi_builder_init(new Utf8String(modelPath).IntPtr, numThreads, (int)options);
+            inst = KiwiCAPI.kiwi_builder_init(new Utf8String(modelPath).IntPtr, numThreads, (int)options | (int)modelType);
             if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
         }
         public int AddWord(string word, string pos, float score)
@@ -392,9 +553,17 @@ namespace KiwiCS
             KiwiCAPI.kiwi_ws_close(ret);
             return words;
         }
+
         public Kiwi Build()
         {
-            KiwiHandle ret = KiwiCAPI.kiwi_builder_build(inst);
+            KiwiHandle ret = KiwiCAPI.kiwi_builder_build(inst, (IntPtr)null, 0);
+            if (ret == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+            return new Kiwi(ret);
+        }
+
+        public Kiwi Build(TypoTransformer typo, float typoCostThreshold = 2.5f)
+        {
+            KiwiHandle ret = KiwiCAPI.kiwi_builder_build(inst, typo.inst, typoCostThreshold);
             if (ret == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
             return new Kiwi(ret);
         }
@@ -404,6 +573,34 @@ namespace KiwiCS
             if (inst != IntPtr.Zero)
             {
                 if (KiwiCAPI.kiwi_builder_close(inst) < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+            }
+        }
+    }
+
+    public class KiwiJoiner
+    {
+        private KiwiJoinerHandle inst;
+
+        public KiwiJoiner(KiwiJoinerHandle _inst)
+        {
+            inst = _inst;
+        }
+
+        public string Get()
+        {
+            return Marshal.PtrToStringUni(KiwiCAPI.kiwi_joiner_get_w(inst));
+        }
+
+        public void Add(string form, string tag, int option = 1)
+        {
+            if (KiwiCAPI.kiwi_joiner_add(inst, new Utf8String(form).IntPtr, new Utf8String(tag).IntPtr, option) < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+        }
+
+        ~KiwiJoiner()
+        {
+            if (inst != IntPtr.Zero)
+            {
+                if (KiwiCAPI.kiwi_joiner_close(inst) < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
             }
         }
     }
@@ -476,10 +673,59 @@ namespace KiwiCS
             if (ret < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
         }
 
+        public KiwiJoiner NewJoiner(bool lmSearch = true)
+        {
+            var h = KiwiCAPI.kiwi_new_joiner(inst, lmSearch ? 1 : 0);
+            if (h == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+            return new KiwiJoiner(h);
+        }
+
         public bool IntegrateAllomorph
         {
             get { return KiwiCAPI.kiwi_get_option(inst, (int)Option.IntegrateAllomorph) != 0; }
             set { KiwiCAPI.kiwi_set_option(inst, (int)Option.IntegrateAllomorph, value ? 1 : 0); }
+        }
+
+        public int MaxUnkFormSize
+        {
+            get { return KiwiCAPI.kiwi_get_option(inst, (int)Option.MaxUnkFormSize); }
+            set { KiwiCAPI.kiwi_set_option(inst, (int)Option.MaxUnkFormSize, value); }
+        }
+
+        public int SpaceTolerance
+        {
+            get { return KiwiCAPI.kiwi_get_option(inst, (int)Option.SpaceTolerance); }
+            set { KiwiCAPI.kiwi_set_option(inst, (int)Option.SpaceTolerance, value); }
+        }
+
+        public float CutOffThreshold
+        {
+            get { return KiwiCAPI.kiwi_get_option_f(inst, (int)Option.CutOffThreshold); }
+            set { KiwiCAPI.kiwi_set_option_f(inst, (int)Option.CutOffThreshold, value); }
+        }
+
+        public float UnkFormScoreScale
+        {
+            get { return KiwiCAPI.kiwi_get_option_f(inst, (int)Option.UnkFormScoreScale); }
+            set { KiwiCAPI.kiwi_set_option_f(inst, (int)Option.UnkFormScoreScale, value); }
+        }
+
+        public float UnkFormScoreBias
+        {
+            get { return KiwiCAPI.kiwi_get_option_f(inst, (int)Option.UnkFormScoreBias); }
+            set { KiwiCAPI.kiwi_set_option_f(inst, (int)Option.UnkFormScoreBias, value); }
+        }
+
+        public float SpacePenalty
+        {
+            get { return KiwiCAPI.kiwi_get_option_f(inst, (int)Option.SpacePenalty); }
+            set { KiwiCAPI.kiwi_set_option_f(inst, (int)Option.SpacePenalty, value); }
+        }
+
+        public float TypoCostWeight
+        {
+            get { return KiwiCAPI.kiwi_get_option_f(inst, (int)Option.TypoCostWeight); }
+            set { KiwiCAPI.kiwi_set_option_f(inst, (int)Option.TypoCostWeight, value); }
         }
 
         ~Kiwi()
