@@ -313,6 +313,7 @@ namespace KiwiGui
             
             KiwiCS.Match match = 0;
             if (NormalizeCoda.IsChecked.Value) match |= KiwiCS.Match.NormalizeCoda;
+            if (ZCoda.IsChecked.Value) match |= KiwiCS.Match.ZCoda;
             if (MatchUrl.IsChecked.Value) match |= KiwiCS.Match.Url;
             if (MatchEmail.IsChecked.Value) match |= KiwiCS.Match.Email;
             if (MatchHashtag.IsChecked.Value) match |= KiwiCS.Match.Hashtag;
@@ -322,6 +323,7 @@ namespace KiwiGui
             if (JoinNounSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinNounSuffix;
             if (JoinVerbSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinVerbSuffix;
             if (JoinAdjSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinAdjSuffix;
+            if (JoinAdvSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinAdvSuffix;
 
             bool hasContent = false;
             foreach(var r in AnalyzeText(InputTxt.Text, TypeCmb.SelectedIndex, match, topN))
@@ -336,66 +338,7 @@ namespace KiwiGui
             UpdateAnalyzeResult();
         }
 
-        private void IntegratedAllomorph_Checked(object sender, RoutedEventArgs e)
-        {
-            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
-            UpdateAnalyzeResult();
-        }
-
-        private void NormalizeCoda_Checked(object sender, RoutedEventArgs e)
-        {
-            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
-            UpdateAnalyzeResult();
-        }
-
-        private void MatchUrl_Checked(object sender, RoutedEventArgs e)
-        {
-            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
-            UpdateAnalyzeResult();
-        }
-
-        private void MatchEmail_Checked(object sender, RoutedEventArgs e)
-        {
-            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
-            UpdateAnalyzeResult();
-        }
-
-        private void MatchHashtag_Checked(object sender, RoutedEventArgs e)
-        {
-            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
-            UpdateAnalyzeResult();
-        }
-
-        private void MatchMention_Checked(object sender, RoutedEventArgs e)
-        {
-            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
-            UpdateAnalyzeResult();
-        }
-        private void MatchSerial_Checked(object sender, RoutedEventArgs e)
-        {
-            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
-            UpdateAnalyzeResult();
-        }
-
-        private void JoinNounPrefix_Checked(object sender, RoutedEventArgs e)
-        {
-            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
-            UpdateAnalyzeResult();
-        }
-
-        private void JoinNounSuffix_Checked(object sender, RoutedEventArgs e)
-        {
-            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
-            UpdateAnalyzeResult();
-        }
-
-        private void JoinVerbSuffix_Checked(object sender, RoutedEventArgs e)
-        {
-            if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
-            UpdateAnalyzeResult();
-        }
-
-        private void JoinAdjSuffix_Checked(object sender, RoutedEventArgs e)
+        private void UpdateAnalyzeResultFromEvent(object sender, RoutedEventArgs e)
         {
             if (AutoAnalyze == null || !AutoAnalyze.IsChecked) return;
             UpdateAnalyzeResult();

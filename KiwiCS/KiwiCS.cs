@@ -430,6 +430,9 @@ namespace KiwiCS
         JoinNounSuffix = 1 << 18,
         JoinVerbSuffix = 1 << 19,
         JoinAdjSuffix = 1 << 20,
+        JoinAdvSuffix = 1 << 21,
+        SplitComplex = 1 << 22,
+        ZCoda = 1 << 23,
     }
 
     public class KiwiLoader
