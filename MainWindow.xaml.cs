@@ -316,7 +316,6 @@ namespace KiwiGui
             resultData.Clear();
 
             App.monitor.TrackAtomicFeature("Kiwi_Menu", "Analyze", InputTxt.Text);
-            string[] lines = TypeCmb.SelectedIndex == 1 ? InputTxt.Text.Trim().Split('\n') : new string[] { InputTxt.Text.Trim() };
             int topN = TopNCmb.SelectedIndex + 1;
             instKiwi.IntegrateAllomorph = IntegratedAllomorph.IsChecked.Value;
             

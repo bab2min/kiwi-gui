@@ -29,6 +29,8 @@
             <Button Name="AddFolderBtn" Content="폴더 추가..." Padding="3" Click="AddFolderBtn_Click" />
             <Button Name="DelBtn" Content="삭제" Padding="3" Click="DelBtn_Click" IsEnabled="False" />
             <ComboBox SelectedIndex="0" Name="TypeCmb" ToolTip="분석 단위를 선택합니다.">
+                <ComboBoxItem>어절별 분석</ComboBoxItem>
+                <ComboBoxItem>문장별 분석</ComboBoxItem>
                 <ComboBoxItem>줄별 분석</ComboBoxItem>
                 <ComboBoxItem>전체 분석</ComboBoxItem>
             </ComboBox>
@@ -46,9 +48,11 @@
                 <ComboBoxItem>형태소/NNG ( + 구분자)</ComboBoxItem>
             </ComboBox>
             <CheckBox Name="IntegrateAllomorph" ToolTip="아/어, 았/었 등의 이형태를 통합할지 선택합니다." IsChecked="True">이형태 통합</CheckBox>
+            <CheckBox Name="SeparateResult" ToolTip="원문과 분석 결과를 분리해서 저장합니다." IsChecked="False" Checked="SeparateResult_Checked" Unchecked="SeparateResult_Unchecked">분석 결과 분리</CheckBox>
             <Button Name="StartBtn" Content="분석 시작" Padding="3" Click="StartBtn_Click" IsEnabled="False"/>
             <Button Name="StopBtn" Content="중단" Padding="3" Click="StopBtn_Click" Visibility="Collapsed"/>
-            <TextBlock TextWrapping="Wrap">분석 결과는 <LineBreak/>"파일이름.tagged"에 저장됩니다.</TextBlock>
+            <TextBlock Name="MsgWithoutSeparation" TextWrapping="Wrap">분석 결과는 "파일이름.tagged"에 저장됩니다.</TextBlock>
+            <TextBlock Name="MsgWithSeparation" TextWrapping="Wrap" Visibility="Collapsed">형태소 분석 결과는 "파일이름.tagged"에 원문은 "파일이름.orig"에 저장됩니다.</TextBlock>
         </StackPanel>
         <ProgressBar Grid.ColumnSpan="2" Grid.Row="1" Name="Prg"></ProgressBar>
     </Grid >

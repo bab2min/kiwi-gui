@@ -5,6 +5,8 @@ using System.ComponentModel;
 using System.Threading;
 using System.IO;
 using System;
+using static System.Net.Mime.MediaTypeNames;
+using System.Linq;
 
 namespace KiwiGui
 {
@@ -15,11 +17,18 @@ namespace KiwiGui
     {
         public KiwiCS.Kiwi instKiwi;
         private BackgroundWorker worker = new BackgroundWorker();
-
+        bool separateResult = false;
+        protected enum AnalyzeMode
+        {
+            Word,
+            Sentence,
+            Line,
+            Whole,
+        }
         protected struct WorkerArgs
         {
             public List<string> fileList;
-            public bool byline;
+            public AnalyzeMode mode;
             public int topN;
             public bool formatTag;
             public string formatSep;
@@ -62,28 +71,70 @@ namespace KiwiGui
             Prg.Value = 0;
         }
 
-        private void analyzeWriteResult(string input, WorkerArgs args, string outputPath)
+        private string morphsToString(IEnumerable<KiwiCS.Token> morphs, bool formatTag, string formatSep)
         {
-            string[] lines = args.byline ? input.Trim().Split('\n') : new string[] { input.Trim() };
-            instKiwi.IntegrateAllomorph = args.integrateAllomorph;
-            using (StreamWriter output = new StreamWriter(outputPath))
+            string ret = "";
+            foreach (var m in morphs)
             {
-                foreach (string line in lines)
+                if (ret.Length > 0) ret += formatSep;
+                ret += m.form;
+                if (formatTag) ret += "/" + m.tag;
+            }
+            return ret;
+        }
+        private void analyzeWriteResult(string input, WorkerArgs args, StreamWriter taggedOutput, StreamWriter origOutput = null)
+        {
+            instKiwi.IntegrateAllomorph = args.integrateAllomorph;
+
+            if (args.mode == AnalyzeMode.Line)
+            {
+                foreach (var line in input.Trim().Split('\n'))
                 {
-                    if (line.Length == 0) continue;
-                    var res = instKiwi.Analyze(line.Trim(), args.topN, KiwiCS.Match.All);
-                    string ret = "";
-                    foreach(var r in res)
+                    var trimmed = line.Trim();
+                    if (trimmed.Length == 0) continue;
+
+                    var res = instKiwi.Analyze(trimmed, args.topN, KiwiCS.Match.All);
+                    origOutput.WriteLine(trimmed);
+                    for (int i = 0; i < res.Length; i++)
                     {
-                        foreach(var m in r.morphs)
-                        {
-                            if (ret.Length > 0) ret += args.formatSep;
-                            ret += m.form;
-                            if (args.formatTag) ret += "/" + m.tag;
-                        }
+                        taggedOutput.WriteLine(morphsToString(res[i].morphs, args.formatTag, args.formatSep));
                     }
-                    output.WriteLine(line.Trim());
-                    output.WriteLine(ret);
+                }
+            }
+            else if (args.mode == AnalyzeMode.Whole)
+            {
+                var res = instKiwi.Analyze(input, args.topN, KiwiCS.Match.All);
+                
+                origOutput.WriteLine(input.Trim());
+                for (int i = 0; i < res.Length; i++)
+                {
+                    taggedOutput.WriteLine(morphsToString(res[i].morphs, args.formatTag, args.formatSep));
+                }
+            }
+            else
+            {
+                var r = instKiwi.Analyze(input, 1, KiwiCS.Match.All)[0];
+                int wp = 0, sp = 0, cp = 0;
+                List<KiwiCS.Token> s = new List<KiwiCS.Token>();
+
+                foreach (var m in r.morphs)
+                {
+                    if (args.mode == AnalyzeMode.Word ? (wp != m.wordPosition || sp != m.sentPosition) : (sp != m.sentPosition))
+                    {
+                        origOutput.WriteLine(input.Substring(cp, (int)m.chrPosition - cp).Replace('\n', ' ').Replace('\r', ' ').Trim());
+                        taggedOutput.WriteLine(morphsToString(s, args.formatTag, args.formatSep));
+                        cp = (int)m.chrPosition;
+                        s.Clear();
+                    }
+                    s.Add(m);
+                    wp = (int)m.wordPosition;
+                    sp = (int)m.sentPosition;
+                }
+
+                if (s.Count > 0)
+                {
+                    origOutput.WriteLine(input.Substring(cp).Replace('\n', ' ').Replace('\r', ' ').Trim());
+                    taggedOutput.WriteLine(morphsToString(s, args.formatTag, args.formatSep));
                 }
             }
         }
@@ -101,7 +152,21 @@ namespace KiwiGui
                     e.Cancel = true;
                     return;
                 }
-                analyzeWriteResult(MainWindow.GetFileText(path), args, path + ".tagged");
+                if (separateResult)
+                {
+                    using (StreamWriter taggedOutput = new StreamWriter(path + ".tagged"), origOutput = new StreamWriter(path + ".orig"))
+                    {
+                        analyzeWriteResult(MainWindow.GetFileText(path), args, taggedOutput, origOutput);
+                    }
+                }
+                else
+                {
+                    using (StreamWriter output = new StreamWriter(path + ".tagged"))
+                    {
+                        analyzeWriteResult(MainWindow.GetFileText(path), args, output, output);
+                    }
+                }
+                
                 worker.ReportProgress((int)(n * 100.0 / args.fileList.Count));
             }
         }
@@ -161,7 +226,7 @@ namespace KiwiGui
                 }
                 else if(File.Exists(i)) args.fileList.Add(i);
             }
-            args.byline = TypeCmb.SelectedIndex == 0;
+            args.mode = (AnalyzeMode)TypeCmb.SelectedIndex;
             args.topN = TopNCmb.SelectedIndex + 1;
             args.formatTag = FormatCmb.SelectedIndex % 2 == 1;
             args.formatSep = FormatCmb.SelectedIndex / 2 == 1 ? " + " : "\t";
@@ -180,6 +245,22 @@ namespace KiwiGui
         private void FileList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             DelBtn.IsEnabled = FileList.SelectedIndex >= 0;
+        }
+
+        private void SeparateResult_Checked(object sender, RoutedEventArgs e)
+        {
+            if (MsgWithoutSeparation == null) return;
+            MsgWithoutSeparation.Visibility = Visibility.Collapsed;
+            MsgWithSeparation.Visibility = Visibility.Visible;
+            separateResult = true;
+        }
+
+        private void SeparateResult_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (MsgWithoutSeparation == null) return;
+            MsgWithoutSeparation.Visibility = Visibility.Visible;
+            MsgWithSeparation.Visibility = Visibility.Collapsed;
+            separateResult = false;
         }
     }
 }
