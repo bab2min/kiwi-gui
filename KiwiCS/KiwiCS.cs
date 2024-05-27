@@ -13,6 +13,8 @@ namespace KiwiCS
     using KiwiWsHandle = IntPtr;
     using KiwiTypoHandle = IntPtr;
     using KiwiJoinerHandle = IntPtr;
+    using KiwiMorphsetHandle = IntPtr;
+    using KiwiPretokenizedHandle = IntPtr;
     internal class Utf8String : IDisposable
     {
         IntPtr iPtr;
@@ -231,10 +233,10 @@ namespace KiwiCS
         public static extern void kiwi_set_option_f(KiwiHandle handle, int option, float value);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern KiwiResHandle kiwi_analyze_w(KiwiHandle handle, IntPtr text, int topN, int matchOptions);
+        public static extern KiwiResHandle kiwi_analyze_w(KiwiHandle handle, IntPtr text, int topN, int matchOptions, KiwiMorphsetHandle blocklist, KiwiPretokenizedHandle pretokenized);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern KiwiResHandle kiwi_analyze(KiwiHandle handle, IntPtr text, int topN, int matchOptions);
+        public static extern KiwiResHandle kiwi_analyze(KiwiHandle handle, IntPtr text, int topN, int matchOptions, KiwiMorphsetHandle blocklist, KiwiPretokenizedHandle pretokenized);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_analyze_mw(KiwiHandle handle, CReader reader, CReceiver receiver, IntPtr userData, int topN, int matchOptions);
@@ -658,8 +660,8 @@ namespace KiwiCS
 
         public Result[] Analyze(string text, int topN = 1, Match matchOptions = Match.All)
         {
-            KiwiResHandle res = KiwiCAPI.kiwi_analyze_w(inst, new Utf16String(text).IntPtr, topN, (int)matchOptions);
-            if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+            KiwiResHandle res = KiwiCAPI.kiwi_analyze_w(inst, new Utf16String(text).IntPtr, topN, (int)matchOptions, IntPtr.Zero, IntPtr.Zero);
+            if (res == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
             Result[] ret = KiwiCAPI.ToResult(res);
             KiwiCAPI.kiwi_res_close(res);
             return ret;
