@@ -21,6 +21,8 @@
                 <MenuItem Header="조금 느리지만 원거리 관계를 추론 가능한 SBG 모델(_S)" Name="MenuSBG" IsCheckable="True" IsChecked="True" Checked="MenuSBG_Checked"/>
                 <Separator />
                 <MenuItem Header="오타 교정 사용(로딩이 매우 김)(_T)" Name="MenuTypo" IsCheckable="True" Checked="MenuTypo_Checked" Unchecked="MenuTypo_Unchecked" />
+                <Separator />
+                <MenuItem Header="다어절 사전 사용(_M)" Name="MenuMulti" IsCheckable="True" IsChecked="True" Checked="MenuMulti_Checked" Unchecked="MenuMulti_Unchecked" />
             </MenuItem>
             <MenuItem Header="옵션(_O)">
                 <MenuItem Header="자동 줄 바꿈(_W)" IsCheckable="True" IsChecked="True" Checked="MenuItem_Wrap_Checked" Unchecked="MenuItem_Wrap_Unchecked"/>

@@ -90,6 +90,7 @@ namespace KiwiGui
         KiwiCS.Kiwi instKiwi;
         KiwiCS.ModelType modelType = KiwiCS.ModelType.SBG;
         bool useTypoCorrection = false;
+        bool useMultiDict = true;
         ObservableCollection<AnalyzeResult> resultData;
 
         private class AnalyzeResult
@@ -126,10 +127,14 @@ namespace KiwiGui
                 string version = KiwiCS.Kiwi.Version();
                 VersionInfo.Header = String.Format("Kiwi 버전 {0}", version);
                 Title += " v" + version;
-                var builder = new KiwiCS.KiwiBuilder("model/", 0, KiwiCS.Option.LoadDefaultDict | KiwiCS.Option.LoadTypoDict, modelType);
+                var builder = new KiwiCS.KiwiBuilder("model/", 0,
+                    KiwiCS.Option.LoadDefaultDict
+                    | KiwiCS.Option.LoadTypoDict
+                    | (useMultiDict ? KiwiCS.Option.LoadMultiDict : 0),
+                    modelType);
                 if (useTypoCorrection)
                 {
-                    instKiwi = builder.Build(new KiwiCS.TypoTransformer(true));
+                    instKiwi = builder.Build(new KiwiCS.TypoTransformer(KiwiCS.DefaultTypoSet.BasicTypoSetWithContinual));
                 }
                 else
                 {
@@ -149,10 +154,14 @@ namespace KiwiGui
 
         private void UpdateKiwiModel()
         {
-            var builder = new KiwiCS.KiwiBuilder("model/", 0, KiwiCS.Option.LoadDefaultDict | KiwiCS.Option.LoadTypoDict, modelType);
+            var builder = new KiwiCS.KiwiBuilder("model/", 0, 
+                KiwiCS.Option.LoadDefaultDict 
+                | KiwiCS.Option.LoadTypoDict 
+                | (useMultiDict ? KiwiCS.Option.LoadMultiDict : 0), 
+                modelType);
             if (useTypoCorrection)
             {
-                instKiwi = builder.Build(new KiwiCS.TypoTransformer(true));
+                instKiwi = builder.Build(new KiwiCS.TypoTransformer(KiwiCS.DefaultTypoSet.BasicTypoSetWithContinual));
             }
             else
             {
@@ -407,6 +416,21 @@ namespace KiwiGui
             UpdateAnalyzeResult();
         }
 
+        private void MenuMulti_Checked(object sender, RoutedEventArgs e)
+        {
+            if (InputTxt == null) return;
+            useMultiDict = true;
+            UpdateKiwiModel();
+            UpdateAnalyzeResult();
+        }
+
+        private void MenuMulti_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (InputTxt == null) return;
+            useMultiDict = false;
+            UpdateKiwiModel();
+            UpdateAnalyzeResult();
+        }
     }
 
 }
