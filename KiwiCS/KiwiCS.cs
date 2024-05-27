@@ -313,6 +313,9 @@ namespace KiwiCS
         public static extern KiwiTypoHandle kiwi_typo_get_basic();
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiTypoHandle kiwi_typo_get_default(int typoSet);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_typo_add(KiwiTypoHandle typo, IntPtr orig, int origSize, IntPtr error, int errorSize, float cost, int condition);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
@@ -402,6 +405,7 @@ namespace KiwiCS
         IntegrateAllomorph = 1 << 0,
         LoadDefaultDict = 1 << 1,
         LoadTypoDict = 1 << 2,
+        LoadMultiDict = 1 << 3,
         MaxUnkFormSize = 0x8002,
         SpaceTolerance = 0x8003,
         CutOffThreshold = 0x9001,
@@ -458,27 +462,41 @@ namespace KiwiCS
         }
     }
 
+    public enum DefaultTypoSet
+    {
+        WithoutTypo = 0,
+        BasicTypoSet,
+        ContinualTypoSet,
+        BasicTypoSetWithContinual,
+    }
+
     public class TypoTransformer
     {
-        public KiwiTypoHandle inst; 
+        private bool readOnly = false;
+        public KiwiTypoHandle inst;
 
-        public TypoTransformer(bool useBasicSet = false)
+        public TypoTransformer()
         {
-            inst = useBasicSet ? KiwiCAPI.kiwi_typo_get_basic() : KiwiCAPI.kiwi_typo_init();
+            inst = KiwiCAPI.kiwi_typo_init();
+        }
+        public TypoTransformer(DefaultTypoSet defaultTypoSet)
+        {
+            readOnly = true;
+            inst = KiwiCAPI.kiwi_typo_get_default((int)defaultTypoSet);
         }
 
         public int Add(string[] orig, string[] error, float cost, int condition)
         {
-            if (inst == KiwiCAPI.kiwi_typo_get_basic())
+            if (readOnly)
             {
-                throw new InvalidOperationException("basic typo object cannot be modified!");
+                throw new InvalidOperationException("default typo object cannot be modified!");
             }
             return KiwiCAPI.kiwi_typo_add(inst, new Utf8StringArray(orig).IntPtr, orig.Length, new Utf8StringArray(error).IntPtr, error.Length, cost, condition);
         }
 
         ~TypoTransformer()
         {
-            if (inst != null && inst != KiwiCAPI.kiwi_typo_get_basic())
+            if (inst != null && !readOnly)
             {
                 KiwiCAPI.kiwi_typo_close(inst);
             }
@@ -516,7 +534,7 @@ namespace KiwiCS
             return 0;
         };
 
-        public KiwiBuilder(string modelPath, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.IntegrateAllomorph, ModelType modelType = ModelType.KNLM)
+        public KiwiBuilder(string modelPath, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.LoadMultiDict | Option.IntegrateAllomorph, ModelType modelType = ModelType.KNLM)
         {
             inst = KiwiCAPI.kiwi_builder_init(new Utf8String(modelPath).IntPtr, numThreads, (int)options | (int)modelType);
             if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
