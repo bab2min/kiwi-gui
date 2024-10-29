@@ -52,7 +52,7 @@ jobs:
         Expand-Archive kiwi_win_x64_${{ env.KIWI_VERSION }}.zip -DestinationPath x64
         mv x64\lib\kiwi.dll KiwiGui_Windows\bin_x64\
         tar -zxvf kiwi_model_${{ env.KIWI_VERSION }}_base.tgz
-        mv ModelGenerator/* KiwiGui_Windows\model\
+        mv models/base/* KiwiGui_Windows\model\
         Compress-Archive -Path 'KiwiGui_Windows' -DestinationPath asset.zip
     - name: Upload release binary
       uses: actions/upload-release-asset@v1.0.2
