@@ -439,6 +439,9 @@ namespace KiwiCS
         JoinAdvSuffix = 1 << 21,
         SplitComplex = 1 << 22,
         ZCoda = 1 << 23,
+        CompatibleJamo = 1 << 24,
+        SplitSaisiot = 1 << 25,
+        MergeSaisiot = 1 << 26,
     }
 
     public class KiwiLoader
