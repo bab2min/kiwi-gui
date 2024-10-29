@@ -38,7 +38,7 @@
         </Menu>
         <Grid Margin="3,0">
             <Grid.RowDefinitions>
-                <RowDefinition Height="2*" MinHeight="210"/>
+                <RowDefinition Height="2*" MinHeight="250"/>
                 <RowDefinition Height="5" />
                 <RowDefinition Height="3*" MinHeight="100"/>
             </Grid.RowDefinitions>
@@ -111,6 +111,13 @@
                             </StackPanel>
                         </GroupBox>
                     </Grid>
+                    <GroupBox Header="사이시옷 분석">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Name="SaisiotNone" Content="미사용" IsChecked="True" ToolTip="사이시옷을 고려하지 않습니다." Checked="UpdateAnalyzeResultFromEvent"/>
+                            <RadioButton Name="SaisiotTrue" Content="분리" ToolTip="사이시옷을 별도의 태그로 분리합니다." Checked="UpdateAnalyzeResultFromEvent"/>
+                            <RadioButton Name="SaisiotFalse" Content="결합" ToolTip="사이시옷을 분리한 뒤 다시 앞 뒤 명사와 결합하여 나타냅니다." Checked="UpdateAnalyzeResultFromEvent"/>
+                        </StackPanel>
+                    </GroupBox>
                     <Button Name="AnalyzeBtn" ToolTip="분석을 시작합니다." Click="AnalyzeBtn_Click">
                         <TextBlock>
                         분석 <TextBlock Foreground="#FF00F000">▶</TextBlock>

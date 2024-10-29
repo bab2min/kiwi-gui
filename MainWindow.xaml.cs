@@ -332,6 +332,8 @@ namespace KiwiGui
             if (JoinVerbSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinVerbSuffix;
             if (JoinAdjSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinAdjSuffix;
             if (JoinAdvSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinAdvSuffix;
+            if (SaisiotTrue.IsChecked.Value) match |= KiwiCS.Match.SplitSaisiot;
+            if (SaisiotFalse.IsChecked.Value) match |= KiwiCS.Match.MergeSaisiot;
 
             bool hasContent = false;
             foreach(var r in AnalyzeText(InputTxt.Text, TypeCmb.SelectedIndex, match, topN))
