@@ -201,6 +201,27 @@ namespace KiwiCS
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate int CReceiver(int id, IntPtr kiwi_res, IntPtr userData);
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate UIntPtr StreamReadFunc(IntPtr userData, IntPtr buffer, UIntPtr length);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate long StreamSeekFunc(IntPtr userData, long offset, int whence);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void StreamCloseFunc(IntPtr userData);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct StreamObject
+        {
+            public StreamReadFunc read;
+            public StreamSeekFunc seek;
+            public StreamCloseFunc close;
+            public IntPtr userData;
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate StreamObject StreamObjectFactory(CString filename);
+
         // global functions
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern CString kiwi_version();
@@ -211,6 +232,9 @@ namespace KiwiCS
         // builder functions
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern KiwiBuilderHandle kiwi_builder_init(CString modelPath, int maxCache, int options, int enabledDialects);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiBuilderHandle kiwi_builder_init_stream(StreamObjectFactory streamObjectFactory, int maxCache, int options, int enabledDialects);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_builder_close(KiwiBuilderHandle handle);
@@ -557,6 +581,19 @@ namespace KiwiCS
         public KiwiBuilder(string modelPath, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.LoadMultiDict | Option.IntegrateAllomorph, ModelType modelType = ModelType.KNLM)
         {
             inst = KiwiCAPI.kiwi_builder_init(new Utf8String(modelPath).IntPtr, numThreads, (int)options | (int)modelType, 0);
+            if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+        }
+
+        public delegate KiwiCAPI.StreamObject StreamObjectFactory(string filename);
+
+        public KiwiBuilder(StreamObjectFactory streamObjectFactory, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.LoadMultiDict | Option.IntegrateAllomorph, ModelType modelType = ModelType.KNLM)
+        {
+            KiwiCAPI.StreamObjectFactory cFactory = (CString filename) =>
+            {
+                string fn = Marshal.PtrToStringAnsi(filename);
+                return streamObjectFactory(fn);
+            };
+            inst = KiwiCAPI.kiwi_builder_init_stream(cFactory, numThreads, (int)options | (int)modelType, 0);
             if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
         }
         public int AddWord(string word, string pos, float score)
