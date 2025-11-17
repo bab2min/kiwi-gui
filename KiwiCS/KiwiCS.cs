@@ -176,6 +176,17 @@ namespace KiwiCS
             public uint typoFormId; /* 교정 전 오타의 형태에 대한 정보 (typoCost가 0인 경우 의미 없음) */
             public uint pairedToken; /* SSO, SSC 태그에 속하는 형태소의 경우 쌍을 이루는 반대쪽 형태소의 위치(-1인 경우 해당하는 형태소가 없는 것을 뜻함) */
             public uint subSentPosition; /* 인용부호나 괄호로 둘러싸인 하위 문장의 번호. 1부터 시작. 0인 경우 하위 문장이 아님을 뜻함 */
+            public ushort dialect; /* 방언 정보 */
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct AnalyzeOption
+        {
+            public int matchOptions; /* KIWI_MATCH_* 열거형 참고 */
+            public KiwiMorphsetHandle blocklist; /* 분석 후보 탐색 과정에서 blocklist에 포함된 형태소들은 배제됩니다 */
+            public int openEnding; /* 마지막 형태소 다음 문장을 종결하지 않고 열린 상태로 끝낼지를 설정합니다 */
+            public int allowedDialects; /* KIWI_DIALECT_* 열거형 참고 */
+            public float dialectCost; /* 방언 형태소에 추가되는 비용 */
         }
 
         [DllImport("kernel32.dll")]
@@ -199,7 +210,7 @@ namespace KiwiCS
 
         // builder functions
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern KiwiBuilderHandle kiwi_builder_init(CString modelPath, int maxCache, int options);
+        public static extern KiwiBuilderHandle kiwi_builder_init(CString modelPath, int maxCache, int options, int enabledDialects);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_builder_close(KiwiBuilderHandle handle);
@@ -233,16 +244,16 @@ namespace KiwiCS
         public static extern void kiwi_set_option_f(KiwiHandle handle, int option, float value);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern KiwiResHandle kiwi_analyze_w(KiwiHandle handle, IntPtr text, int topN, int matchOptions, KiwiMorphsetHandle blocklist, KiwiPretokenizedHandle pretokenized);
+        public static extern KiwiResHandle kiwi_analyze_w(KiwiHandle handle, IntPtr text, int topN, AnalyzeOption option, KiwiPretokenizedHandle pretokenized);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern KiwiResHandle kiwi_analyze(KiwiHandle handle, IntPtr text, int topN, int matchOptions, KiwiMorphsetHandle blocklist, KiwiPretokenizedHandle pretokenized);
+        public static extern KiwiResHandle kiwi_analyze(KiwiHandle handle, IntPtr text, int topN, AnalyzeOption option, KiwiPretokenizedHandle pretokenized);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int kiwi_analyze_mw(KiwiHandle handle, CReader reader, CReceiver receiver, IntPtr userData, int topN, int matchOptions);
+        public static extern int kiwi_analyze_mw(KiwiHandle handle, CReader reader, CReceiver receiver, IntPtr userData, int topN, AnalyzeOption option);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int kiwi_analyze_m(KiwiHandle handle, CReader reader, CReceiver receiver, IntPtr userData, int topN, int matchOptions);
+        public static extern int kiwi_analyze_m(KiwiHandle handle, CReader reader, CReceiver receiver, IntPtr userData, int topN, AnalyzeOption option);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_close(KiwiHandle handle);
@@ -282,7 +293,7 @@ namespace KiwiCS
         public static extern int kiwi_res_sent_position(KiwiResHandle result, int index, int num);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern ref TokenInfo kiwi_res_token_info(KiwiResHandle result, int index, int num);
+        public static extern IntPtr kiwi_res_token_info(KiwiResHandle result, int index, int num);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_res_close(KiwiResHandle result);
@@ -349,18 +360,23 @@ namespace KiwiCS
                     ret[i].morphs[j].form = Marshal.PtrToStringUni(kiwi_res_form_w(kiwiresult, i, j));
                     ret[i].morphs[j].tag = Marshal.PtrToStringUni(kiwi_res_tag_w(kiwiresult, i, j));
                     
-                    var ti = kiwi_res_token_info(kiwiresult, i, j);
-                    ret[i].morphs[j].chrPosition = ti.chrPosition;
-                    ret[i].morphs[j].wordPosition = ti.wordPosition;
-                    ret[i].morphs[j].sentPosition = ti.sentPosition;
-                    ret[i].morphs[j].lineNumber = ti.lineNumber;
-                    ret[i].morphs[j].length = ti.length;
-                    ret[i].morphs[j].senseId = ti.senseId;
-                    ret[i].morphs[j].score = ti.score;
-                    ret[i].morphs[j].typoCost = ti.typoCost;
-                    ret[i].morphs[j].typoFormId = ti.typoFormId;
-                    ret[i].morphs[j].pairedToken = ti.pairedToken;
-                    ret[i].morphs[j].subSentPosition = ti.subSentPosition;
+                    IntPtr tiPtr = kiwi_res_token_info(kiwiresult, i, j);
+                    if (tiPtr != IntPtr.Zero)
+                    {
+                        TokenInfo ti = Marshal.PtrToStructure<TokenInfo>(tiPtr);
+                        ret[i].morphs[j].chrPosition = ti.chrPosition;
+                        ret[i].morphs[j].wordPosition = ti.wordPosition;
+                        ret[i].morphs[j].sentPosition = ti.sentPosition;
+                        ret[i].morphs[j].lineNumber = ti.lineNumber;
+                        ret[i].morphs[j].length = ti.length;
+                        ret[i].morphs[j].senseId = ti.senseId;
+                        ret[i].morphs[j].score = ti.score;
+                        ret[i].morphs[j].typoCost = ti.typoCost;
+                        ret[i].morphs[j].typoFormId = ti.typoFormId;
+                        ret[i].morphs[j].pairedToken = ti.pairedToken;
+                        ret[i].morphs[j].subSentPosition = ti.subSentPosition;
+                        ret[i].morphs[j].dialect = ti.dialect;
+                    }
                 }
                 ret[i].prob = kiwi_res_prob(kiwiresult, i);
             }
@@ -398,6 +414,7 @@ namespace KiwiCS
         public uint typoFormId; /* 교정 전 오타의 형태에 대한 정보 (typoCost가 0인 경우 의미 없음) */
         public uint pairedToken; /* SSO, SSC 태그에 속하는 형태소의 경우 쌍을 이루는 반대쪽 형태소의 위치(-1인 경우 해당하는 형태소가 없는 것을 뜻함) */
         public uint subSentPosition; /* 인용부호나 괄호로 둘러싸인 하위 문장의 번호. 1부터 시작. 0인 경우 하위 문장이 아님을 뜻함 */
+        public ushort dialect; /* 방언 정보 */
     }
 
     public enum Option
@@ -539,7 +556,7 @@ namespace KiwiCS
 
         public KiwiBuilder(string modelPath, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.LoadMultiDict | Option.IntegrateAllomorph, ModelType modelType = ModelType.KNLM)
         {
-            inst = KiwiCAPI.kiwi_builder_init(new Utf8String(modelPath).IntPtr, numThreads, (int)options | (int)modelType);
+            inst = KiwiCAPI.kiwi_builder_init(new Utf8String(modelPath).IntPtr, numThreads, (int)options | (int)modelType, 0);
             if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
         }
         public int AddWord(string word, string pos, float score)
@@ -681,7 +698,15 @@ namespace KiwiCS
 
         public Result[] Analyze(string text, int topN = 1, Match matchOptions = Match.All)
         {
-            KiwiResHandle res = KiwiCAPI.kiwi_analyze_w(inst, new Utf16String(text).IntPtr, topN, (int)matchOptions, IntPtr.Zero, IntPtr.Zero);
+            KiwiCAPI.AnalyzeOption option = new KiwiCAPI.AnalyzeOption
+            {
+                matchOptions = (int)matchOptions,
+                blocklist = IntPtr.Zero,
+                openEnding = 0,
+                allowedDialects = 0,
+                dialectCost = 3.0f
+            };
+            KiwiResHandle res = KiwiCAPI.kiwi_analyze_w(inst, new Utf16String(text).IntPtr, topN, option, IntPtr.Zero);
             if (res == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
             Result[] ret = KiwiCAPI.ToResult(res);
             KiwiCAPI.kiwi_res_close(res);
@@ -694,7 +719,15 @@ namespace KiwiCS
             this.reader = reader;
             this.receiver = receiver;
             readItem = null;
-            int ret = KiwiCAPI.kiwi_analyze_mw(inst, readerInst, receiverInst, (IntPtr)handle, topN, (int)matchOptions);
+            KiwiCAPI.AnalyzeOption option = new KiwiCAPI.AnalyzeOption
+            {
+                matchOptions = (int)matchOptions,
+                blocklist = IntPtr.Zero,
+                openEnding = 0,
+                allowedDialects = 0,
+                dialectCost = 3.0f
+            };
+            int ret = KiwiCAPI.kiwi_analyze_mw(inst, readerInst, receiverInst, (IntPtr)handle, topN, option);
             handle.Free();
             if (ret < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
         }
