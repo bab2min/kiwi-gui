@@ -642,7 +642,11 @@ namespace KiwiCS
             {
                 throw new InvalidOperationException("default typo object cannot be modified!");
             }
-            return KiwiCAPI.kiwi_typo_add(inst, new Utf8StringArray(orig).IntPtr, orig.Length, new Utf8StringArray(error).IntPtr, error.Length, cost, condition);
+            using (var origArray = new Utf8StringArray(orig))
+            using (var errorArray = new Utf8StringArray(error))
+            {
+                return KiwiCAPI.kiwi_typo_add(inst, origArray.IntPtr, orig.Length, errorArray.IntPtr, error.Length, cost, condition);
+            }
         }
 
         ~TypoTransformer()
@@ -681,40 +685,55 @@ namespace KiwiCS
             {
                 return ki.readItem.Item2?.Length ?? 0;
             }
-            KiwiCAPI.CopyMemory(buf, new Utf16String(ki.readItem.Item2).IntPtr, (uint)ki.readItem.Item2.Length * 2);
+            using (var textStr = new Utf16String(ki.readItem.Item2))
+            {
+                KiwiCAPI.CopyMemory(buf, textStr.IntPtr, (uint)ki.readItem.Item2.Length * 2);
+            }
             return 0;
         };
 
         public KiwiBuilder(string modelPath, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.LoadMultiDict | Option.IntegrateAllomorph, ModelType modelType = ModelType.KNLM)
         {
-            inst = KiwiCAPI.kiwi_builder_init(new Utf8String(modelPath).IntPtr, numThreads, (int)options | (int)modelType, 0);
-            if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+            using (var pathStr = new Utf8String(modelPath))
+            {
+                inst = KiwiCAPI.kiwi_builder_init(pathStr.IntPtr, numThreads, (int)options | (int)modelType, 0);
+                if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+            }
         }
 
         public delegate KiwiCAPI.StreamObject StreamObjectFactory(string filename);
 
+        private KiwiCAPI.StreamObjectFactory streamFactoryDelegate; // Keep reference to prevent GC
+
         public KiwiBuilder(StreamObjectFactory streamObjectFactory, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.LoadMultiDict | Option.IntegrateAllomorph, ModelType modelType = ModelType.KNLM)
         {
-            KiwiCAPI.StreamObjectFactory cFactory = (CString filename) =>
+            streamFactoryDelegate = (CString filename) =>
             {
                 string fn = Marshal.PtrToStringAnsi(filename);
                 return streamObjectFactory(fn);
             };
-            inst = KiwiCAPI.kiwi_builder_init_stream(cFactory, numThreads, (int)options | (int)modelType, 0);
+            inst = KiwiCAPI.kiwi_builder_init_stream(streamFactoryDelegate, numThreads, (int)options | (int)modelType, 0);
             if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
         }
         public int AddWord(string word, string pos, float score)
         {
-            int ret = KiwiCAPI.kiwi_builder_add_word(inst, new Utf8String(word).IntPtr, new Utf8String(pos).IntPtr, score);
-            if (ret < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
-            return ret;
+            using (var wordStr = new Utf8String(word))
+            using (var posStr = new Utf8String(pos))
+            {
+                int ret = KiwiCAPI.kiwi_builder_add_word(inst, wordStr.IntPtr, posStr.IntPtr, score);
+                if (ret < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+                return ret;
+            }
         }
 
         public int LoadDictionary(string dictPath)
         {
-            int ret = KiwiCAPI.kiwi_builder_load_dict(inst, new Utf8String(dictPath).IntPtr);
-            if (ret < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
-            return ret;
+            using (var pathStr = new Utf8String(dictPath))
+            {
+                int ret = KiwiCAPI.kiwi_builder_load_dict(inst, pathStr.IntPtr);
+                if (ret < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+                return ret;
+            }
         }
         public ExtractedWord[] ExtractWords(Reader reader, int minCnt = 5, int maxWordLen = 10, float minScore = 0.1f, float posThreshold = -3)
         {
@@ -780,7 +799,12 @@ namespace KiwiCS
 
         public void Add(string form, string tag, int option = 1)
         {
-            if (KiwiCAPI.kiwi_joiner_add(inst, new Utf8String(form).IntPtr, new Utf8String(tag).IntPtr, option) < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+            using (var formStr = new Utf8String(form))
+            using (var tagStr = new Utf8String(tag))
+            {
+                if (KiwiCAPI.kiwi_joiner_add(inst, formStr.IntPtr, tagStr.IntPtr, option) < 0) 
+                    throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+            }
         }
 
         ~KiwiJoiner()
@@ -820,7 +844,10 @@ namespace KiwiCS
             {
                 return ki.readItem.Item2?.Length ?? 0;
             }
-            KiwiCAPI.CopyMemory(buf, new Utf16String(ki.readItem.Item2).IntPtr, (uint)ki.readItem.Item2.Length * 2);
+            using (var textStr = new Utf16String(ki.readItem.Item2))
+            {
+                KiwiCAPI.CopyMemory(buf, textStr.IntPtr, (uint)ki.readItem.Item2.Length * 2);
+            }
             return 0;
         };
 
@@ -850,11 +877,14 @@ namespace KiwiCS
                 allowedDialects = 0,
                 dialectCost = 3.0f
             };
-            KiwiResHandle res = KiwiCAPI.kiwi_analyze_w(inst, new Utf16String(text).IntPtr, topN, option, IntPtr.Zero);
-            if (res == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
-            Result[] ret = KiwiCAPI.ToResult(res);
-            KiwiCAPI.kiwi_res_close(res);
-            return ret;
+            using (var textStr = new Utf16String(text))
+            {
+                KiwiResHandle res = KiwiCAPI.kiwi_analyze_w(inst, textStr.IntPtr, topN, option, IntPtr.Zero);
+                if (res == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+                Result[] ret = KiwiCAPI.ToResult(res);
+                KiwiCAPI.kiwi_res_close(res);
+                return ret;
+            }
         }
 
         public void AnalyzeMulti(Reader reader, Receiver receiver, int topN = 1, Match matchOptions = Match.All)
