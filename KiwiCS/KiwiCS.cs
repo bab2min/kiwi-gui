@@ -11,10 +11,12 @@ namespace KiwiCS
     using KiwiBuilderHandle = IntPtr;
     using KiwiResHandle = IntPtr;
     using KiwiWsHandle = IntPtr;
+    using KiwiSsHandle = IntPtr;
     using KiwiTypoHandle = IntPtr;
     using KiwiJoinerHandle = IntPtr;
     using KiwiMorphsetHandle = IntPtr;
     using KiwiPretokenizedHandle = IntPtr;
+    using KiwiSwtokenizerHandle = IntPtr;
     internal class Utf8String : IDisposable
     {
         IntPtr iPtr;
@@ -189,6 +191,19 @@ namespace KiwiCS
             public float dialectCost; /* 방언 형태소에 추가되는 비용 */
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Config
+        {
+            public byte integrateAllomorph; /* 이형태 형태소의 통합 여부 */
+            public float cutOffThreshold; /* 분석 과정에서 이 값보다 더 크게 차이가 나는 후보들은 제거합니다 */
+            public float unkFormScoreScale; /* 미등재 형태 추출 시 사용하는 기울기 값 */
+            public float unkFormScoreBias; /* 미등재 형태 추출 시 사용하는 편향 값 */
+            public float spacePenalty; /* 공백 패널티 */
+            public float typoCostWeight; /* 오타 비용의 가중치 */
+            public uint maxUnkFormSize; /* 미등재 형태의 최대 크기 */
+            public uint spaceTolerance; /* 공백 허용치 */
+        }
+
         [DllImport("kernel32.dll")]
         private static extern IntPtr LoadLibrary(string dllToLoad);
 
@@ -229,6 +244,12 @@ namespace KiwiCS
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern CString kiwi_error();
 
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void kiwi_clear_error();
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern CString kiwi_get_script_name(byte script);
+
         // builder functions
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern KiwiBuilderHandle kiwi_builder_init(CString modelPath, int maxCache, int options, int enabledDialects);
@@ -243,6 +264,12 @@ namespace KiwiCS
         public static extern int kiwi_builder_add_word(KiwiBuilderHandle handle, CString word, CString pos, float score);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_builder_add_alias_word(KiwiBuilderHandle handle, CString alias, CString pos, float score, CString origWord);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_builder_add_pre_analyzed_word(KiwiBuilderHandle handle, CString form, int size, IntPtr analyzedMorphs, IntPtr analyzedPos, float score, IntPtr positions);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_builder_load_dict(KiwiBuilderHandle handle, CString dictPath);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
@@ -254,7 +281,17 @@ namespace KiwiCS
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern KiwiHandle kiwi_builder_build(KiwiBuilderHandle handle, KiwiTypoHandle typos, float typo_cost_threshold);
 
+        // analyzer initialization functions
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiHandle kiwi_init(CString modelPath, int numThreads, int options);
+
         // analyzer functions
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void kiwi_set_global_config(KiwiHandle handle, Config config);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern Config kiwi_get_global_config(KiwiHandle handle);
+
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_get_option(KiwiHandle handle, int option);
 
@@ -278,6 +315,15 @@ namespace KiwiCS
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_analyze_m(KiwiHandle handle, CReader reader, CReceiver receiver, IntPtr userData, int topN, AnalyzeOption option);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiSsHandle kiwi_split_into_sents_w(KiwiHandle handle, IntPtr text, int matchOptions, ref KiwiResHandle tokenizedRes);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiSsHandle kiwi_split_into_sents(KiwiHandle handle, IntPtr text, int matchOptions, ref KiwiResHandle tokenizedRes);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiMorphsetHandle kiwi_new_morphset(KiwiHandle handle);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_close(KiwiHandle handle);
@@ -317,6 +363,12 @@ namespace KiwiCS
         public static extern int kiwi_res_sent_position(KiwiResHandle result, int index, int num);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern float kiwi_res_score(KiwiResHandle result, int index, int num);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern float kiwi_res_typo_cost(KiwiResHandle result, int index, int num);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr kiwi_res_token_info(KiwiResHandle result, int index, int num);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
@@ -341,6 +393,46 @@ namespace KiwiCS
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_ws_close(KiwiWsHandle result);
 
+        // sentence splitting functions
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_ss_size(KiwiSsHandle result);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_ss_begin_position(KiwiSsHandle result, int index);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_ss_end_position(KiwiSsHandle result, int index);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_ss_close(KiwiSsHandle result);
+
+        // morphset functions
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_morphset_add(KiwiMorphsetHandle handle, CString form, CString tag);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_morphset_add_w(KiwiMorphsetHandle handle, IntPtr form, CString tag);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_morphset_close(KiwiMorphsetHandle handle);
+
+        // pretokenized functions
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiPretokenizedHandle kiwi_pt_init();
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_pt_add_span(KiwiPretokenizedHandle handle, int begin, int end);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_pt_add_token_to_span(KiwiPretokenizedHandle handle, int spanId, CString form, CString tag, int begin, int end);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_pt_add_token_to_span_w(KiwiPretokenizedHandle handle, int spanId, IntPtr form, CString tag, int begin, int end);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_pt_close(KiwiPretokenizedHandle handle);
+
+        // typo transformer functions
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern KiwiTypoHandle kiwi_typo_init();
 
@@ -352,6 +444,21 @@ namespace KiwiCS
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_typo_add(KiwiTypoHandle typo, IntPtr orig, int origSize, IntPtr error, int errorSize, float cost, int condition);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiTypoHandle kiwi_typo_copy(KiwiTypoHandle handle);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_typo_update(KiwiTypoHandle handle, KiwiTypoHandle src);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_typo_scale_cost(KiwiTypoHandle handle, float scale);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_typo_set_continual_typo_cost(KiwiTypoHandle handle, float threshold);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_typo_set_lengthening_typo_cost(KiwiTypoHandle handle, float threshold);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_typo_close(KiwiTypoHandle typo);
