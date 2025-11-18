@@ -252,10 +252,10 @@ namespace KiwiCS
 
         // builder functions
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern KiwiBuilderHandle kiwi_builder_init(CString modelPath, int maxCache, int options, int enabledDialects);
+        public static extern KiwiBuilderHandle kiwi_builder_init(CString modelPath, int numThreads, int options, int enabledDialects);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern KiwiBuilderHandle kiwi_builder_init_stream(StreamObjectFactory streamObjectFactory, int maxCache, int options, int enabledDialects);
+        public static extern KiwiBuilderHandle kiwi_builder_init_stream(StreamObjectFactory streamObjectFactory, int numThreads, int options, int enabledDialects);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_builder_close(KiwiBuilderHandle handle);
@@ -506,7 +506,7 @@ namespace KiwiCS
                         ret[i].morphs[j].typoFormId = ti.typoFormId;
                         ret[i].morphs[j].pairedToken = ti.pairedToken;
                         ret[i].morphs[j].subSentPosition = ti.subSentPosition;
-                        ret[i].morphs[j].dialect = ti.dialect;
+                        ret[i].morphs[j].dialect = (Dialect)ti.dialect;
                     }
                 }
                 ret[i].prob = kiwi_res_prob(kiwiresult, i);
@@ -545,7 +545,7 @@ namespace KiwiCS
         public uint typoFormId; /* 교정 전 오타의 형태에 대한 정보 (typoCost가 0인 경우 의미 없음) */
         public uint pairedToken; /* SSO, SSC 태그에 속하는 형태소의 경우 쌍을 이루는 반대쪽 형태소의 위치(-1인 경우 해당하는 형태소가 없는 것을 뜻함) */
         public uint subSentPosition; /* 인용부호나 괄호로 둘러싸인 하위 문장의 번호. 1부터 시작. 0인 경우 하위 문장이 아님을 뜻함 */
-        public ushort dialect; /* 방언 정보 */
+        public Dialect dialect; /* 방언 정보 */
     }
 
     public enum Option
@@ -554,19 +554,16 @@ namespace KiwiCS
         LoadDefaultDict = 1 << 1,
         LoadTypoDict = 1 << 2,
         LoadMultiDict = 1 << 3,
-        MaxUnkFormSize = 0x8002,
-        SpaceTolerance = 0x8003,
-        CutOffThreshold = 0x9001,
-        UnkFormScoreScale = 0x9002,
-        UnkFormScoreBias = 0x9003,
-        SpacePenalty = 0x9004,
-        TypoCostWeight = 0x9005,
     }
 
     public enum ModelType
     {
-        KNLM = 0x0000,
-        SBG = 0x0100,
+        Default = 0x0000,
+        Largest = 0x0100,
+        Knlm = 0x0200,
+        Sbg = 0x0300,
+        Cong = 0x0400,
+        CongGlobal = 0x0500,
     }
 
     public enum Match
@@ -590,6 +587,22 @@ namespace KiwiCS
         CompatibleJamo = 1 << 24,
         SplitSaisiot = 1 << 25,
         MergeSaisiot = 1 << 26,
+    }
+
+    public enum Dialect
+    {
+        Standard = 0,
+        Gyeonggi = 1 << 0,
+        Chungcheong = 1 << 1,
+        Gangwon = 1 << 2,
+        Gyeongsang = 1 << 3,
+        Jeolla = 1 << 4,
+        Jeju = 1 << 5,
+        Hwanghae = 1 << 6,
+        Hamgyeong = 1 << 7,
+        Pyeongan = 1 << 8,
+        Archaic = 1 << 9,
+        All = Archaic * 2 - 1,
     }
 
     public class KiwiLoader
@@ -692,27 +705,71 @@ namespace KiwiCS
             return 0;
         };
 
-        public KiwiBuilder(string modelPath, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.LoadMultiDict | Option.IntegrateAllomorph, ModelType modelType = ModelType.KNLM)
+        public KiwiBuilder(string modelPath, 
+            int numThreads = 0, 
+            Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.LoadMultiDict | Option.IntegrateAllomorph, 
+            ModelType modelType = ModelType.Default,
+            Dialect enabledDialects = Dialect.Standard)
         {
             using (var pathStr = new Utf8String(modelPath))
             {
-                inst = KiwiCAPI.kiwi_builder_init(pathStr.IntPtr, numThreads, (int)options | (int)modelType, 0);
+                inst = KiwiCAPI.kiwi_builder_init(pathStr.IntPtr, numThreads, (int)options | (int)modelType, (int)enabledDialects);
                 if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
             }
         }
 
-        public delegate KiwiCAPI.StreamObject StreamObjectFactory(string filename);
-
-        private KiwiCAPI.StreamObjectFactory streamFactoryDelegate; // Keep reference to prevent GC
-
-        public KiwiBuilder(StreamObjectFactory streamObjectFactory, int numThreads = 0, Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.LoadMultiDict | Option.IntegrateAllomorph, ModelType modelType = ModelType.KNLM)
+        public abstract class Stream
         {
-            streamFactoryDelegate = (CString filename) =>
+            public abstract UIntPtr Read(IntPtr buffer, UIntPtr length);
+            public abstract long Seek(long offset, int whence);
+            public abstract void Close();
+
+        }
+
+        public delegate Stream StreamObjectFactory(string filename);
+
+        public KiwiBuilder(StreamObjectFactory streamObjectFactory, 
+            int numThreads = 0, 
+            Option options = Option.LoadDefaultDict | Option.LoadTypoDict | Option.LoadMultiDict | Option.IntegrateAllomorph, 
+            ModelType modelType = ModelType.Default,
+            Dialect enabledDialects = Dialect.Standard)
+        {
+            KiwiCAPI.StreamObjectFactory streamFactoryDelegate = (CString filename) =>
             {
                 string fn = Marshal.PtrToStringAnsi(filename);
-                return streamObjectFactory(fn);
+                var stream = streamObjectFactory(fn);
+
+                // convert to C API delegates
+                KiwiCAPI.StreamReadFunc readFunc = (IntPtr userData, IntPtr buffer, UIntPtr length) =>
+                {
+                    GCHandle handle = (GCHandle)userData;
+                    Stream strm = handle.Target as Stream;
+                    return strm.Read(buffer, length);
+                };
+                KiwiCAPI.StreamSeekFunc seekFunc = (IntPtr userData, long offset, int whence) =>
+                {
+                    GCHandle handle = (GCHandle)userData;
+                    Stream strm = handle.Target as Stream;
+                    return strm.Seek(offset, whence);
+                };
+                KiwiCAPI.StreamCloseFunc closeFunc = (IntPtr userData) =>
+                {
+                    GCHandle handle = (GCHandle)userData;
+                    Stream strm = handle.Target as Stream;
+                    strm.Close();
+                    handle.Free();
+                };
+                GCHandle streamHandle = GCHandle.Alloc(stream);
+                KiwiCAPI.StreamObject so = new KiwiCAPI.StreamObject()
+                {
+                    read = readFunc,
+                    seek = seekFunc,
+                    close = closeFunc,
+                    userData = (IntPtr)streamHandle,
+                };
+                return so;
             };
-            inst = KiwiCAPI.kiwi_builder_init_stream(streamFactoryDelegate, numThreads, (int)options | (int)modelType, 0);
+            inst = KiwiCAPI.kiwi_builder_init_stream(streamFactoryDelegate, numThreads, (int)options | (int)modelType, (int)enabledDialects);
             if (inst == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
         }
         public int AddWord(string word, string pos, float score)
@@ -867,15 +924,15 @@ namespace KiwiCS
             return Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_version());
         }
 
-        public Result[] Analyze(string text, int topN = 1, Match matchOptions = Match.All)
+        public Result[] Analyze(string text, int topN = 1, Match matchOptions = Match.All, Dialect allowedDialects = Dialect.Standard, float dialectCost = 3.0f)
         {
             KiwiCAPI.AnalyzeOption option = new KiwiCAPI.AnalyzeOption
             {
                 matchOptions = (int)matchOptions,
                 blocklist = IntPtr.Zero,
                 openEnding = 0,
-                allowedDialects = 0,
-                dialectCost = 3.0f
+                allowedDialects = (int)allowedDialects,
+                dialectCost = dialectCost
             };
             using (var textStr = new Utf16String(text))
             {
@@ -887,7 +944,7 @@ namespace KiwiCS
             }
         }
 
-        public void AnalyzeMulti(Reader reader, Receiver receiver, int topN = 1, Match matchOptions = Match.All)
+        public void AnalyzeMulti(Reader reader, Receiver receiver, int topN = 1, Match matchOptions = Match.All, Dialect allowedDialects = Dialect.Standard, float dialectCost = 3.0f)
         {
             GCHandle handle = GCHandle.Alloc(this);
             this.reader = reader;
@@ -898,8 +955,8 @@ namespace KiwiCS
                 matchOptions = (int)matchOptions,
                 blocklist = IntPtr.Zero,
                 openEnding = 0,
-                allowedDialects = 0,
-                dialectCost = 3.0f
+                allowedDialects = (int)allowedDialects,
+                dialectCost = dialectCost
             };
             int ret = KiwiCAPI.kiwi_analyze_mw(inst, readerInst, receiverInst, (IntPtr)handle, topN, option);
             handle.Free();
@@ -915,50 +972,90 @@ namespace KiwiCS
 
         public bool IntegrateAllomorph
         {
-            get { return KiwiCAPI.kiwi_get_option(inst, (int)Option.IntegrateAllomorph) != 0; }
-            set { KiwiCAPI.kiwi_set_option(inst, (int)Option.IntegrateAllomorph, value ? 1 : 0); }
+            get { return KiwiCAPI.kiwi_get_global_config(inst).integrateAllomorph != 0; }
+            set 
+            {
+                var config = KiwiCAPI.kiwi_get_global_config(inst);
+                config.integrateAllomorph = (byte)(value ? 1 : 0);
+                KiwiCAPI.kiwi_set_global_config(inst, config);
+            }
         }
 
         public int MaxUnkFormSize
         {
-            get { return KiwiCAPI.kiwi_get_option(inst, (int)Option.MaxUnkFormSize); }
-            set { KiwiCAPI.kiwi_set_option(inst, (int)Option.MaxUnkFormSize, value); }
+            get { return (int)KiwiCAPI.kiwi_get_global_config(inst).maxUnkFormSize; }
+            set
+            {
+                var config = KiwiCAPI.kiwi_get_global_config(inst);
+                config.maxUnkFormSize = (uint)value;
+                KiwiCAPI.kiwi_set_global_config(inst, config);
+            }
         }
 
         public int SpaceTolerance
         {
-            get { return KiwiCAPI.kiwi_get_option(inst, (int)Option.SpaceTolerance); }
-            set { KiwiCAPI.kiwi_set_option(inst, (int)Option.SpaceTolerance, value); }
+            get { return (int)KiwiCAPI.kiwi_get_global_config(inst).spaceTolerance; }
+            set
+            {
+                var config = KiwiCAPI.kiwi_get_global_config(inst);
+                config.spaceTolerance = (uint)value;
+                KiwiCAPI.kiwi_set_global_config(inst, config);
+            }
         }
 
         public float CutOffThreshold
         {
-            get { return KiwiCAPI.kiwi_get_option_f(inst, (int)Option.CutOffThreshold); }
-            set { KiwiCAPI.kiwi_set_option_f(inst, (int)Option.CutOffThreshold, value); }
+            get { return KiwiCAPI.kiwi_get_global_config(inst).cutOffThreshold; }
+            set
+            {
+                var config = KiwiCAPI.kiwi_get_global_config(inst);
+                config.cutOffThreshold = value;
+                KiwiCAPI.kiwi_set_global_config(inst, config);
+            }
         }
 
         public float UnkFormScoreScale
         {
-            get { return KiwiCAPI.kiwi_get_option_f(inst, (int)Option.UnkFormScoreScale); }
-            set { KiwiCAPI.kiwi_set_option_f(inst, (int)Option.UnkFormScoreScale, value); }
+            get { return KiwiCAPI.kiwi_get_global_config(inst).unkFormScoreScale; }
+            set
+            {
+                var config = KiwiCAPI.kiwi_get_global_config(inst);
+                config.unkFormScoreScale = value;
+                KiwiCAPI.kiwi_set_global_config(inst, config);
+            }
         }
 
         public float UnkFormScoreBias
         {
-            get { return KiwiCAPI.kiwi_get_option_f(inst, (int)Option.UnkFormScoreBias); }
-            set { KiwiCAPI.kiwi_set_option_f(inst, (int)Option.UnkFormScoreBias, value); }
+            get { return KiwiCAPI.kiwi_get_global_config(inst).unkFormScoreBias; }
+            set
+            {
+                var config = KiwiCAPI.kiwi_get_global_config(inst);
+                config.unkFormScoreBias = value;
+                KiwiCAPI.kiwi_set_global_config(inst, config);
+            }
         }
 
         public float SpacePenalty
         {
-            get { return KiwiCAPI.kiwi_get_option_f(inst, (int)Option.SpacePenalty); }
-            set { KiwiCAPI.kiwi_set_option_f(inst, (int)Option.SpacePenalty, value); }
+            get { return KiwiCAPI.kiwi_get_global_config(inst).spacePenalty; }
+            set
+            {
+                var config = KiwiCAPI.kiwi_get_global_config(inst);
+                config.spacePenalty = value;
+                KiwiCAPI.kiwi_set_global_config(inst, config);
+            }
         }
 
         public float TypoCostWeight
         {
-            get { return KiwiCAPI.kiwi_get_option_f(inst, (int)Option.TypoCostWeight); }
-            set { KiwiCAPI.kiwi_set_option_f(inst, (int)Option.TypoCostWeight, value); }
+            get { return KiwiCAPI.kiwi_get_global_config(inst).typoCostWeight; }
+            set
+            {
+                var config = KiwiCAPI.kiwi_get_global_config(inst);
+                config.typoCostWeight = value;
+                KiwiCAPI.kiwi_set_global_config(inst, config);
+            }
         }
 
         ~Kiwi()
