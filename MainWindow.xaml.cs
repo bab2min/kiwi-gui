@@ -88,7 +88,8 @@ namespace KiwiGui
     public partial class MainWindow : Window
     {
         KiwiCS.Kiwi instKiwi;
-        KiwiCS.ModelType modelType = KiwiCS.ModelType.SBG;
+        KiwiCS.ModelType modelType = KiwiCS.ModelType.Largest;
+        KiwiCS.Dialect enabledDialects = KiwiCS.Dialect.Standard;
         bool useTypoCorrection = false;
         bool useMultiDict = true;
         ObservableCollection<AnalyzeResult> resultData;
@@ -131,7 +132,8 @@ namespace KiwiGui
                     KiwiCS.Option.LoadDefaultDict
                     | KiwiCS.Option.LoadTypoDict
                     | (useMultiDict ? KiwiCS.Option.LoadMultiDict : 0),
-                    modelType);
+                    modelType,
+                    enabledDialects);
                 if (useTypoCorrection)
                 {
                     instKiwi = builder.Build(new KiwiCS.TypoTransformer(KiwiCS.DefaultTypoSet.BasicTypoSetWithContinual));
@@ -158,7 +160,8 @@ namespace KiwiGui
                 KiwiCS.Option.LoadDefaultDict 
                 | KiwiCS.Option.LoadTypoDict 
                 | (useMultiDict ? KiwiCS.Option.LoadMultiDict : 0), 
-                modelType);
+                modelType,
+                enabledDialects);
             if (useTypoCorrection)
             {
                 instKiwi = builder.Build(new KiwiCS.TypoTransformer(KiwiCS.DefaultTypoSet.BasicTypoSetWithContinual));
@@ -251,7 +254,7 @@ namespace KiwiGui
             System.Diagnostics.Process.Start("http://bab2min.tistory.com/category/%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%98%EB%B0%8D/NLP");
         }
 
-        private IEnumerable<AnalyzeResult> AnalyzeText(string text, int mode, KiwiCS.Match match, int topN = 1)
+        private IEnumerable<AnalyzeResult> AnalyzeText(string text, int mode, KiwiCS.Match match, KiwiCS.Dialect allowedDialects, int topN = 1)
         {
             if (mode == 2)
             {
@@ -259,7 +262,7 @@ namespace KiwiGui
                 foreach(var line in text.Trim().Split('\n'))
                 {
                     var trimmed = line.Trim();
-                    var res = instKiwi.Analyze(trimmed, topN, match);
+                    var res = instKiwi.Analyze(trimmed, topN, match, allowedDialects);
                     List<List<KiwiCS.Token>> s = new List<List<KiwiCS.Token>>();
                     foreach (var r in res)
                     {
@@ -273,7 +276,7 @@ namespace KiwiGui
             }
             else if(mode == 3)
             {
-                var res = instKiwi.Analyze(text, topN, match);
+                var res = instKiwi.Analyze(text, topN, match, allowedDialects);
                 List<List<KiwiCS.Token>> s = new List<List<KiwiCS.Token>>();
                 foreach (var r in res)
                 {
@@ -284,7 +287,7 @@ namespace KiwiGui
             }
             else
             {
-                var r = instKiwi.Analyze(text, 1, match)[0];
+                var r = instKiwi.Analyze(text, 1, match, allowedDialects)[0];
                 int wp = 0, sp = 0, cp = 0, rid = 0, c = 0;
                 List<KiwiCS.Token> s = new List<KiwiCS.Token>();
                 
@@ -336,7 +339,7 @@ namespace KiwiGui
             if (SaisiotFalse.IsChecked.Value) match |= KiwiCS.Match.MergeSaisiot;
 
             bool hasContent = false;
-            foreach(var r in AnalyzeText(InputTxt.Text, TypeCmb.SelectedIndex, match, topN))
+            foreach(var r in AnalyzeText(InputTxt.Text, TypeCmb.SelectedIndex, match, enabledDialects, topN))
             {
                 hasContent = true;
                 resultData.Add(r);
@@ -379,24 +382,24 @@ namespace KiwiGui
             e.Cancel = true;
         }
 
-        private void MenuKNLM_Checked(object sender, RoutedEventArgs e)
+        private void MenuDefault_Checked(object sender, RoutedEventArgs e)
         {
             if (InputTxt == null) return;
-            if (modelType == KiwiCS.ModelType.KNLM) return;
-            MenuKNLM.IsChecked = true;
-            MenuSBG.IsChecked = false;
-            modelType = KiwiCS.ModelType.KNLM;
+            if (modelType == KiwiCS.ModelType.Default) return;
+            MenuDefault.IsChecked = true;
+            MenuLargest.IsChecked = false;
+            modelType = KiwiCS.ModelType.Default;
             UpdateKiwiModel();
             UpdateAnalyzeResult();
         }
 
-        private void MenuSBG_Checked(object sender, RoutedEventArgs e)
+        private void MenuLargest_Checked(object sender, RoutedEventArgs e)
         {
             if (InputTxt == null) return;
-            if (modelType == KiwiCS.ModelType.SBG) return;
-            MenuKNLM.IsChecked = false;
-            MenuSBG.IsChecked = true;
-            modelType = KiwiCS.ModelType.SBG;
+            if (modelType == KiwiCS.ModelType.Largest) return;
+            MenuDefault.IsChecked = false;
+            MenuLargest.IsChecked = true;
+            modelType = KiwiCS.ModelType.Largest;
             UpdateKiwiModel();
             UpdateAnalyzeResult();
         }
@@ -431,6 +434,19 @@ namespace KiwiGui
             useMultiDict = false;
             UpdateKiwiModel();
             UpdateAnalyzeResult();
+        }
+
+        private void MenuDialect_Click(object sender, RoutedEventArgs e)
+        {
+            DialectSelectDlg dlg = new DialectSelectDlg(enabledDialects);
+            dlg.Owner = this;
+            var result = dlg.ShowDialog();
+            if (result == true)
+            {
+                enabledDialects = dlg.selectedDialect;
+                UpdateKiwiModel();
+                UpdateAnalyzeResult();
+            }
         }
     }
 
