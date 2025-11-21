@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.IO;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace KiwiCS
 {
@@ -179,6 +180,24 @@ namespace KiwiCS
             public uint pairedToken; /* SSO, SSC 태그에 속하는 형태소의 경우 쌍을 이루는 반대쪽 형태소의 위치(-1인 경우 해당하는 형태소가 없는 것을 뜻함) */
             public uint subSentPosition; /* 인용부호나 괄호로 둘러싸인 하위 문장의 번호. 1부터 시작. 0인 경우 하위 문장이 아님을 뜻함 */
             public ushort dialect; /* 방언 정보 */
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MorphemeInfo
+        {
+            public byte tag; /* 품사 태그 */
+            public byte senseId; /* 의미 번호 */
+            public float userScore; /* 사용자 정의 점수 */
+            public uint lmMorphemeId; /* 언어모델 형태소 ID */
+            public uint origMorphemeId; /* 원래 형태소 ID */
+            public ushort dialect; /* 방언 정보 */
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SimilarityPair
+        {
+            public uint id;
+            public float score;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -477,6 +496,48 @@ namespace KiwiCS
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_joiner_close(KiwiJoinerHandle handle);
+
+        // morpheme finding functions
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_find_morphemes(KiwiHandle handle, CString form, CString tag, int senseId, IntPtr morphIds, int maxCount);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_find_morphemes_with_prefix(KiwiHandle handle, CString formPrefix, CString tag, int senseId, IntPtr morphIds, int maxCount);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern MorphemeInfo kiwi_get_morpheme_info(KiwiHandle handle, uint morphId);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern CString kiwi_get_morpheme_form(KiwiHandle handle, uint morphId);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_free_morpheme_form(CString form);
+
+        // context and similarity functions
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_cong_most_similar_words(KiwiHandle handle, uint morphId, IntPtr output, int topN);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern float kiwi_cong_similarity(KiwiHandle handle, uint morphId1, uint morphId2);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_cong_most_similar_contexts(KiwiHandle handle, uint contextId, IntPtr output, int topN);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern float kiwi_cong_context_similarity(KiwiHandle handle, uint contextId1, uint contextId2);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_cong_predict_words_from_context(KiwiHandle handle, uint contextId, IntPtr output, int topN);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_cong_predict_words_from_context_diff(KiwiHandle handle, uint contextId, uint bgContextId, float weight, IntPtr output, int topN);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern uint kiwi_cong_to_context_id(KiwiHandle handle, IntPtr morphIds, int size);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_cong_from_context_id(KiwiHandle handle, uint contextId, IntPtr morphIds, int maxSize);
+
         public static Result[] ToResult(KiwiResHandle kiwiresult)
         {
             int resCount = kiwi_res_size(kiwiresult);
@@ -1055,6 +1116,279 @@ namespace KiwiCS
                 var config = KiwiCAPI.kiwi_get_global_config(inst);
                 config.typoCostWeight = value;
                 KiwiCAPI.kiwi_set_global_config(inst, config);
+            }
+        }
+
+        /// <summary>
+        /// 모델 사전에서 조건에 맞는 형태소를 찾아 그 ID를 반환합니다.
+        /// </summary>
+        /// <param name="form">형태소 형태 (null일 경우 모든 형태)</param>
+        /// <param name="tag">품사 태그 (null일 경우 모든 품사)</param>
+        /// <param name="senseId">의미 번호 (-1일 경우 모든 의미)</param>
+        /// <param name="maxCount">반환할 최대 개수</param>
+        /// <returns>찾은 형태소 ID 배열</returns>
+        public uint[] FindMorphemes(string form = null, string tag = null, int senseId = -1, int maxCount = 100)
+        {
+            IntPtr ptr = Marshal.AllocHGlobal(sizeof(uint) * maxCount);
+            try
+            {
+                using (var formStr = new Utf8String(form))
+                using (var tagStr = new Utf8String(tag))
+                {
+                    int count = KiwiCAPI.kiwi_find_morphemes(inst, formStr.IntPtr, tagStr.IntPtr, senseId, ptr, maxCount);
+                    if (count < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+                    
+                    uint[] result = new uint[count];
+                    for (int i = 0; i < count; i++)
+                    {
+                        result[i] = (uint)Marshal.ReadInt32(ptr, i * sizeof(uint));
+                    }
+                    return result;
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+        }
+
+        /// <summary>
+        /// 모델 사전에서 특정 접두사로 시작하는 형태소를 찾아 그 ID를 반환합니다.
+        /// </summary>
+        /// <param name="formPrefix">형태소 형태 접두사</param>
+        /// <param name="tag">품사 태그 (null일 경우 모든 품사)</param>
+        /// <param name="senseId">의미 번호 (-1일 경우 모든 의미)</param>
+        /// <param name="maxCount">반환할 최대 개수</param>
+        /// <returns>찾은 형태소 ID 배열</returns>
+        public uint[] FindMorphemesWithPrefix(string formPrefix, string tag = null, int senseId = -1, int maxCount = 100)
+        {
+            IntPtr ptr = Marshal.AllocHGlobal(sizeof(uint) * maxCount);
+            try
+            {
+                using (var formStr = new Utf8String(formPrefix))
+                using (var tagStr = new Utf8String(tag))
+                {
+                    int count = KiwiCAPI.kiwi_find_morphemes_with_prefix(inst, formStr.IntPtr, tagStr.IntPtr, senseId, ptr, maxCount);
+                    if (count < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+                    
+                    uint[] result = new uint[count];
+                    for (int i = 0; i < count; i++)
+                    {
+                        result[i] = (uint)Marshal.ReadInt32(ptr, i * sizeof(uint));
+                    }
+                    return result;
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+        }
+
+        /// <summary>
+        /// 형태소 ID로부터 형태소 정보를 조회합니다.
+        /// </summary>
+        /// <param name="morphId">형태소 ID</param>
+        /// <returns>형태소 정보</returns>
+        public KiwiCAPI.MorphemeInfo GetMorphemeInfo(uint morphId)
+        {
+            return KiwiCAPI.kiwi_get_morpheme_info(inst, morphId);
+        }
+
+        /// <summary>
+        /// 형태소 ID로부터 형태소 문자열 형태를 조회합니다.
+        /// </summary>
+        /// <param name="morphId">형태소 ID</param>
+        /// <returns>형태소 문자열</returns>
+        public string GetMorphemeForm(uint morphId)
+        {
+            CString formPtr = KiwiCAPI.kiwi_get_morpheme_form(inst, morphId);
+            if (formPtr == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+            
+            string result = Marshal.PtrToStringAnsi(formPtr);
+            KiwiCAPI.kiwi_free_morpheme_form(formPtr);
+            return result;
+        }
+
+        /// <summary>
+        /// 주어진 형태소와 가장 유사한 형태소들을 반환합니다.
+        /// </summary>
+        /// <param name="morphId">형태소 ID</param>
+        /// <param name="topN">반환할 최대 개수</param>
+        /// <returns>유사한 형태소 ID와 점수의 배열</returns>
+        public (uint id, float score)[] MostSimilarWords(uint morphId, int topN = 10)
+        {
+            IntPtr ptr = Marshal.AllocHGlobal(Marshal.SizeOf<KiwiCAPI.SimilarityPair>() * topN);
+            try
+            {
+                int count = KiwiCAPI.kiwi_cong_most_similar_words(inst, morphId, ptr, topN);
+                if (count < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+                
+                var result = new (uint, float)[count];
+                for (int i = 0; i < count; i++)
+                {
+                    var pair = Marshal.PtrToStructure<KiwiCAPI.SimilarityPair>(ptr + i * Marshal.SizeOf<KiwiCAPI.SimilarityPair>());
+                    result[i] = (pair.id, pair.score);
+                }
+                return result;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+        }
+
+        /// <summary>
+        /// 두 형태소 간의 유사도를 반환합니다.
+        /// </summary>
+        /// <param name="morphId1">첫 번째 형태소 ID</param>
+        /// <param name="morphId2">두 번째 형태소 ID</param>
+        /// <returns>유사도 점수</returns>
+        public float WordSimilarity(uint morphId1, uint morphId2)
+        {
+            return KiwiCAPI.kiwi_cong_similarity(inst, morphId1, morphId2);
+        }
+
+        /// <summary>
+        /// 주어진 문맥과 가장 유사한 문맥들을 반환합니다.
+        /// </summary>
+        /// <param name="contextId">문맥 ID</param>
+        /// <param name="topN">반환할 최대 개수</param>
+        /// <returns>유사한 문맥 ID와 점수의 배열</returns>
+        public (uint id, float score)[] MostSimilarContexts(uint contextId, int topN = 10)
+        {
+            IntPtr ptr = Marshal.AllocHGlobal(Marshal.SizeOf<KiwiCAPI.SimilarityPair>() * topN);
+            try
+            {
+                int count = KiwiCAPI.kiwi_cong_most_similar_contexts(inst, contextId, ptr, topN);
+                if (count < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+                
+                var result = new (uint, float)[count];
+                for (int i = 0; i < count; i++)
+                {
+                    var pair = Marshal.PtrToStructure<KiwiCAPI.SimilarityPair>(ptr + i * Marshal.SizeOf<KiwiCAPI.SimilarityPair>());
+                    result[i] = (pair.id, pair.score);
+                }
+                return result;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+        }
+
+        /// <summary>
+        /// 두 문맥 간의 유사도를 반환합니다.
+        /// </summary>
+        /// <param name="contextId1">첫 번째 문맥 ID</param>
+        /// <param name="contextId2">두 번째 문맥 ID</param>
+        /// <returns>유사도 점수</returns>
+        public float ContextSimilarity(uint contextId1, uint contextId2)
+        {
+            return KiwiCAPI.kiwi_cong_context_similarity(inst, contextId1, contextId2);
+        }
+
+        /// <summary>
+        /// 주어진 문맥으로부터 예측되는 다음 단어들을 반환합니다.
+        /// </summary>
+        /// <param name="contextId">문맥 ID</param>
+        /// <param name="topN">반환할 최대 개수</param>
+        /// <returns>예측된 단어 ID와 점수의 배열</returns>
+        public (uint id, float score)[] PredictWordsFromContext(uint contextId, int topN = 10)
+        {
+            IntPtr ptr = Marshal.AllocHGlobal(Marshal.SizeOf<KiwiCAPI.SimilarityPair>() * topN);
+            try
+            {
+                int count = KiwiCAPI.kiwi_cong_predict_words_from_context(inst, contextId, ptr, topN);
+                if (count < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+                
+                var result = new (uint, float)[count];
+                for (int i = 0; i < count; i++)
+                {
+                    var pair = Marshal.PtrToStructure<KiwiCAPI.SimilarityPair>(ptr + i * Marshal.SizeOf<KiwiCAPI.SimilarityPair>());
+                    result[i] = (pair.id, pair.score);
+                }
+                return result;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+        }
+
+        /// <summary>
+        /// 두 문맥의 차이로부터 예측되는 다음 단어들을 반환합니다.
+        /// </summary>
+        /// <param name="contextId">기본 문맥 ID</param>
+        /// <param name="bgContextId">배경 문맥 ID</param>
+        /// <param name="weight">가중치</param>
+        /// <param name="topN">반환할 최대 개수</param>
+        /// <returns>예측된 단어 ID와 점수의 배열</returns>
+        public (uint id, float score)[] PredictWordsFromContextDiff(uint contextId, uint bgContextId, float weight, int topN = 10)
+        {
+            IntPtr ptr = Marshal.AllocHGlobal(Marshal.SizeOf<KiwiCAPI.SimilarityPair>() * topN);
+            try
+            {
+                int count = KiwiCAPI.kiwi_cong_predict_words_from_context_diff(inst, contextId, bgContextId, weight, ptr, topN);
+                if (count < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+                
+                var result = new (uint, float)[count];
+                for (int i = 0; i < count; i++)
+                {
+                    var pair = Marshal.PtrToStructure<KiwiCAPI.SimilarityPair>(ptr + i * Marshal.SizeOf<KiwiCAPI.SimilarityPair>());
+                    result[i] = (pair.id, pair.score);
+                }
+                return result;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+        }
+
+        /// <summary>
+        /// 주어진 형태소 배열로부터 문맥 ID를 생성합니다.
+        /// </summary>
+        /// <param name="morphIds">형태소 ID 배열</param>
+        /// <returns>문맥 ID</returns>
+        public uint ToContextId(uint[] morphIds)
+        {
+            IntPtr ptr = Marshal.AllocHGlobal(sizeof(uint) * morphIds.Length);
+            try
+            {
+                Marshal.Copy(morphIds.Select(x => (int)x).ToArray(), 0, ptr, morphIds.Length);
+                return KiwiCAPI.kiwi_cong_to_context_id(inst, ptr, morphIds.Length);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+        }
+
+        /// <summary>
+        /// 문맥을 구성하고 있는 형태소 배열을 조회합니다.
+        /// </summary>
+        /// <param name="contextId">문맥 ID</param>
+        /// <param name="maxSize">반환할 최대 개수</param>
+        /// <returns>형태소 ID 배열</returns>
+        public uint[] FromContextId(uint contextId, int maxSize = 100)
+        {
+            IntPtr ptr = Marshal.AllocHGlobal(sizeof(uint) * maxSize);
+            try
+            {
+                int count = KiwiCAPI.kiwi_cong_from_context_id(inst, contextId, ptr, maxSize);
+                if (count < 0) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+                
+                uint[] result = new uint[count];
+                for (int i = 0; i < count; i++)
+                {
+                    result[i] = (uint)Marshal.ReadInt32(ptr, i * sizeof(uint));
+                }
+                return result;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
             }
         }
 
