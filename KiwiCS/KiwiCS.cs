@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.IO;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace KiwiCS
 {
@@ -1356,7 +1355,12 @@ namespace KiwiCS
             IntPtr ptr = Marshal.AllocHGlobal(sizeof(uint) * morphIds.Length);
             try
             {
-                Marshal.Copy(morphIds.Select(x => (int)x).ToArray(), 0, ptr, morphIds.Length);
+                int[] intArray = new int[morphIds.Length];
+                for (int i = 0; i < morphIds.Length; i++)
+                {
+                    intArray[i] = (int)morphIds[i];
+                }
+                Marshal.Copy(intArray, 0, ptr, morphIds.Length);
                 return KiwiCAPI.kiwi_cong_to_context_id(inst, ptr, morphIds.Length);
             }
             finally
