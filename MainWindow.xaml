@@ -25,6 +25,8 @@
                 <MenuItem Header="다어절 사전 사용(_M)" Name="MenuMulti" IsCheckable="True" IsChecked="True" Checked="MenuMulti_Checked" Unchecked="MenuMulti_Unchecked" />
                 <Separator />
                 <MenuItem Header="방언 분석 설정(_D)" Name="MenuDialect" Click="MenuDialect_Click"/>
+                <Separator />
+                <MenuItem Header="언어모델 탐색기(_I)" Click="MenuModelExplorer_Click"/>
             </MenuItem>
             <MenuItem Header="옵션(_O)">
                 <MenuItem Header="자동 줄 바꿈(_W)" IsCheckable="True" IsChecked="True" Checked="MenuItem_Wrap_Checked" Unchecked="MenuItem_Wrap_Unchecked"/>
