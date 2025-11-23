@@ -93,7 +93,10 @@ namespace KiwiGui
         bool useTypoCorrection = false;
         bool useMultiDict = true;
         ObservableCollection<AnalyzeResult> resultData;
-
+        public KiwiCS.Kiwi GetKiwiInstance()
+        {
+            return instKiwi;
+        }
         private class AnalyzeResult
         {
             public int Id { get; set; }
@@ -447,6 +450,13 @@ namespace KiwiGui
                 UpdateKiwiModel();
                 UpdateAnalyzeResult();
             }
+        }
+
+        private void MenuModelExplorer_Click(object sender, RoutedEventArgs e)
+        {
+            ModelExplorer dlg = new ModelExplorer();
+            dlg.Owner = this;
+            dlg.Show();
         }
     }
 
