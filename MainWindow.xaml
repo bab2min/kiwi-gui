@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:KiwiGui"
         mc:Ignorable="d"
-        Title="키위 형태소 분석기 GUI" Height="450" Width="625" WindowStartupLocation="CenterScreen" Initialized="Window_Initialized" Closed="Window_Closed">
+        Title="키위 형태소 분석기 GUI" Height="550" Width="625" WindowStartupLocation="CenterScreen" Initialized="Window_Initialized" Closed="Window_Closed">
     <DockPanel Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="파일(_F)">
@@ -19,8 +19,6 @@
             <MenuItem Header="모델(_M)">
                 <MenuItem Header="근거리 관계만 추론 가능하지만 빠른 모델(_C)" Name="MenuDefault" IsCheckable="True" Checked="MenuDefault_Checked"/>
                 <MenuItem Header="조금 느리지만 원거리 관계를 추론 가능한 모델(_G)" Name="MenuLargest" IsCheckable="True" IsChecked="True" Checked="MenuLargest_Checked"/>
-                <Separator />
-                <MenuItem Header="오타 교정 사용(로딩이 매우 김)(_T)" Name="MenuTypo" IsCheckable="True" Checked="MenuTypo_Checked" Unchecked="MenuTypo_Unchecked" />
                 <Separator />
                 <MenuItem Header="다어절 사전 사용(_M)" Name="MenuMulti" IsCheckable="True" IsChecked="True" Checked="MenuMulti_Checked" Unchecked="MenuMulti_Unchecked" />
                 <Separator />
@@ -42,7 +40,7 @@
         </Menu>
         <Grid Margin="3,0">
             <Grid.RowDefinitions>
-                <RowDefinition Height="2*" MinHeight="250"/>
+                <RowDefinition Height="2*" MinHeight="360"/>
                 <RowDefinition Height="5" />
                 <RowDefinition Height="3*" MinHeight="100"/>
             </Grid.RowDefinitions>
@@ -103,6 +101,7 @@
                                 <CheckBox Name="MatchHashtag" IsChecked="False" ToolTip="#으로 시작하는 해시태그를 추출합니다." Checked="UpdateAnalyzeResultFromEvent" Unchecked="UpdateAnalyzeResultFromEvent">W__HASHTAG</CheckBox>
                                 <CheckBox Name="MatchMention" IsChecked="False" ToolTip="@으로 시작하는 멘션을 추출합니다." Checked="UpdateAnalyzeResultFromEvent" Unchecked="UpdateAnalyzeResultFromEvent">W__MENTION</CheckBox>
                                 <CheckBox Name="MatchSerial" IsChecked="False" ToolTip="일련번호를 추출합니다." Checked="UpdateAnalyzeResultFromEvent" Unchecked="UpdateAnalyzeResultFromEvent">W__SERIAL</CheckBox>
+                                <CheckBox Name="MatchEmoji" IsChecked="False" ToolTip="이모지를 추출합니다." Checked="UpdateAnalyzeResultFromEvent" Unchecked="UpdateAnalyzeResultFromEvent">W__EMOJI</CheckBox>
                             </StackPanel>
                         </GroupBox>
                         <GroupBox Header="결합" Grid.Column="1">
@@ -112,6 +111,7 @@
                                 <CheckBox Name="JoinVerbSuffix" IsChecked="False" ToolTip="동사 파생접사를 분리하지 않습니다." Checked="UpdateAnalyzeResultFromEvent" Unchecked="UpdateAnalyzeResultFromEvent">동사 파생접사</CheckBox>
                                 <CheckBox Name="JoinAdjSuffix" IsChecked="False" ToolTip="형용사 파생접사를 분리하지 않습니다." Checked="UpdateAnalyzeResultFromEvent" Unchecked="UpdateAnalyzeResultFromEvent">형용사 파생접사</CheckBox>
                                 <CheckBox Name="JoinAdvSuffix" IsChecked="False" ToolTip="부사 파생접사를 분리하지 않습니다." Checked="UpdateAnalyzeResultFromEvent" Unchecked="UpdateAnalyzeResultFromEvent">부사 파생접사</CheckBox>
+                                <CheckBox Name="JoinParticleYo" IsChecked="False" ToolTip="보조사 '요'를 결합해서 출력합니다." Checked="UpdateAnalyzeResultFromEvent" Unchecked="UpdateAnalyzeResultFromEvent">보조사 '요'</CheckBox>
                             </StackPanel>
                         </GroupBox>
                     </Grid>
@@ -122,6 +122,34 @@
                             <RadioButton Name="SaisiotFalse" Content="결합" ToolTip="사이시옷을 분리한 뒤 다시 앞 뒤 명사와 결합하여 나타냅니다." Checked="UpdateAnalyzeResultFromEvent"/>
                         </StackPanel>
                     </GroupBox>
+                    <GroupBox Header="오타 / 띄어쓰기 교정">
+                        <StackPanel Orientation="Vertical">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Name="TypoCmb" Grid.Column="0" ToolTip="형태소 분석 시 오타를 교정할지 여부를 선택합니다. " SelectedIndex="0" SelectionChanged="TypoCmb_SelectionChanged">
+                                    <ComboBoxItem ToolTip="오타 교정을 사용하지 않습니다.">오타 교정 없음</ComboBoxItem>
+                                    <ComboBoxItem ToolTip="발음이 유사하여 자주 실수하는 모음(ex. ㅐㅔ, ㅚㅙ), 받침(ex. ㅅㄷ, ㄺㄻ) 등의 오타를 교정합니다.">기본 교정</ComboBoxItem>
+                                    <ComboBoxItem ToolTip="기본 오타 교정에 추가로 연철 오타(ex. 머거 -> 먹어, 어떠케 -> 어떻게)까지 교정합니다.">기본 + 연철 교정</ComboBoxItem>
+                                    <ComboBoxItem ToolTip="기본 오타, 연철 오타에 추가로 장음화 오타(ex. 지인짜 -> 진짜)까지 교정합니다.">기본 + 연철 + 장음화 교정</ComboBoxItem>
+                                </ComboBox>
+                                <TextBox Name="TypoThresholdBox" Grid.Column="1" ToolTip="한 형태소에서 최대로 교정할 수 있는 오타의 비용을 설정합니다." PreviewTextInput="TypoThresholdBox_PreviewTextInput" InputMethod.IsInputMethodEnabled="False" TextAlignment="Right">2.5</TextBox>
+                            </Grid>
+                            <ComboBox Name="SpaceToleranceCmb" Grid.Column="1" ToolTip="형태소 분석 시 띄어쓰기 오류를 얼마나 허용할지 선택합니다. " SelectedIndex="0" SelectionChanged="UpdateAnalyzeResultFromEvent">
+                                <ComboBoxItem>띄어쓰기 교정 없음</ComboBoxItem>
+                                <ComboBoxItem>띄어쓰기 최대 1개 교정</ComboBoxItem>
+                                <ComboBoxItem>띄어쓰기 최대 2개 교정</ComboBoxItem>
+                                <ComboBoxItem>띄어쓰기 최대 3개 교정</ComboBoxItem>
+                            </ComboBox>
+                        </StackPanel>
+                    </GroupBox>
+                    <ComboBox Name="OOVCmb" ToolTip="신조어나 사전 미등재어를 처리할 방법을 선택합니다." SelectedIndex="1" SelectionChanged="UpdateAnalyzeResultFromEvent">
+                        <ComboBoxItem ToolTip="처음 보는 문자열 패턴에 길이 기반으로 명사 점수를 부여합니다.">규칙 기반 OOV</ComboBoxItem>
+                        <ComboBoxItem ToolTip="처음 보는 문자열 패턴에 문자 모델 기반으로 명사 점수를 부여합니다.">문자 모델 기반 OOV</ComboBoxItem>
+                        <ComboBoxItem ToolTip="처음 보는 문자열 패턴에 문자 모델과 빈도 정보를 모두 고려하여 명사 점수를 부여합니다.">문자 모델 + 빈도 기반 OOV</ComboBoxItem>
+                    </ComboBox>
                     <Button Name="AnalyzeBtn" ToolTip="분석을 시작합니다." Click="AnalyzeBtn_Click">
                         <TextBlock>
                         분석 <TextBlock Foreground="#FF00F000">▶</TextBlock>

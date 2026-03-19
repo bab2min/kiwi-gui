@@ -90,7 +90,8 @@ namespace KiwiGui
         KiwiCS.Kiwi instKiwi;
         KiwiCS.ModelType modelType = KiwiCS.ModelType.Largest;
         KiwiCS.Dialect enabledDialects = KiwiCS.Dialect.Standard;
-        bool useTypoCorrection = false;
+        KiwiCS.DefaultTypoSet typoSet = KiwiCS.DefaultTypoSet.WithoutTypo;
+        KiwiCS.PreparedTypoTransformer typoTransformer = null;
         bool useMultiDict = true;
         ObservableCollection<AnalyzeResult> resultData;
         public KiwiCS.Kiwi GetKiwiInstance()
@@ -137,14 +138,7 @@ namespace KiwiGui
                     | (useMultiDict ? KiwiCS.Option.LoadMultiDict : 0),
                     modelType,
                     enabledDialects);
-                if (useTypoCorrection)
-                {
-                    instKiwi = builder.Build(new KiwiCS.TypoTransformer(KiwiCS.DefaultTypoSet.BasicTypoSetWithContinual));
-                }
-                else
-                {
-                    instKiwi = builder.Build();
-                }
+                instKiwi = builder.Build();
                 ResultBlock.DataContext = resultData = new ObservableCollection<AnalyzeResult>();
             }
             catch (Exception ex)
@@ -159,20 +153,13 @@ namespace KiwiGui
 
         private void UpdateKiwiModel()
         {
-            var builder = new KiwiCS.KiwiBuilder("model/", 0, 
-                KiwiCS.Option.LoadDefaultDict 
-                | KiwiCS.Option.LoadTypoDict 
-                | (useMultiDict ? KiwiCS.Option.LoadMultiDict : 0), 
+            var builder = new KiwiCS.KiwiBuilder("model/", 0,
+                KiwiCS.Option.LoadDefaultDict
+                | KiwiCS.Option.LoadTypoDict
+                | (useMultiDict ? KiwiCS.Option.LoadMultiDict : 0),
                 modelType,
                 enabledDialects);
-            if (useTypoCorrection)
-            {
-                instKiwi = builder.Build(new KiwiCS.TypoTransformer(KiwiCS.DefaultTypoSet.BasicTypoSetWithContinual));
-            }
-            else
-            {
-                instKiwi = builder.Build();
-            }
+            instKiwi = builder.Build();
         }
 
         private void Window_Closed(object sender, EventArgs e)
@@ -208,18 +195,18 @@ namespace KiwiGui
 
             if (ofd.ShowDialog() != true) return;
             string res = "";
-            foreach(var r in resultData)
+            foreach (var r in resultData)
             {
                 res += r.Input;
                 res += "\n";
                 int c = 0;
-                foreach(var l in r.Result)
+                foreach (var l in r.Result)
                 {
                     if (c++ > 0) res += "\n";
                     int d = 0;
-                    foreach(var m in l)
+                    foreach (var m in l)
                     {
-                        if(d++ > 0) res += " + ";
+                        if (d++ > 0) res += " + ";
                         res += m.form + "/" + m.tag;
                     }
                 }
@@ -259,13 +246,15 @@ namespace KiwiGui
 
         private IEnumerable<AnalyzeResult> AnalyzeText(string text, int mode, KiwiCS.Match match, KiwiCS.Dialect allowedDialects, int topN = 1)
         {
+            float typoThreshold = TypoThresholdBox.Text.Length > 0 ? float.Parse(TypoThresholdBox.Text) : 2.5f;
+            instKiwi.SpaceTolerance = SpaceToleranceCmb.SelectedIndex;
             if (mode == 2)
             {
                 int rid = 0;
-                foreach(var line in text.Trim().Split('\n'))
+                foreach (var line in text.Trim().Split('\n'))
                 {
                     var trimmed = line.Trim();
-                    var res = instKiwi.Analyze(trimmed, topN, match, allowedDialects);
+                    var res = instKiwi.Analyze(trimmed, topN, match, allowedDialects, 3, typoTransformer, typoThreshold);
                     List<List<KiwiCS.Token>> s = new List<List<KiwiCS.Token>>();
                     foreach (var r in res)
                     {
@@ -277,9 +266,9 @@ namespace KiwiGui
                     yield return new AnalyzeResult(++rid, trimmed, s);
                 }
             }
-            else if(mode == 3)
+            else if (mode == 3)
             {
-                var res = instKiwi.Analyze(text, topN, match, allowedDialects);
+                var res = instKiwi.Analyze(text, topN, match, allowedDialects, 3, typoTransformer, typoThreshold);
                 List<List<KiwiCS.Token>> s = new List<List<KiwiCS.Token>>();
                 foreach (var r in res)
                 {
@@ -290,13 +279,13 @@ namespace KiwiGui
             }
             else
             {
-                var r = instKiwi.Analyze(text, 1, match, allowedDialects)[0];
+                var r = instKiwi.Analyze(text, 1, match, allowedDialects, 3, typoTransformer, typoThreshold)[0];
                 int wp = 0, sp = 0, cp = 0, rid = 0, c = 0;
                 List<KiwiCS.Token> s = new List<KiwiCS.Token>();
-                
+
                 foreach (var m in r.morphs)
                 {
-                    if(mode == 0 ? (wp != m.wordPosition || sp != m.sentPosition) : (sp != m.sentPosition) )
+                    if (mode == 0 ? (wp != m.wordPosition || sp != m.sentPosition) : (sp != m.sentPosition))
                     {
                         yield return new AnalyzeResult(++rid, text.Substring(cp, (int)m.chrPosition - cp).Trim(), s);
                         cp = (int)m.chrPosition;
@@ -324,7 +313,7 @@ namespace KiwiGui
             App.monitor.TrackAtomicFeature("Kiwi_Menu", "Analyze", InputTxt.Text);
             int topN = TopNCmb.SelectedIndex + 1;
             instKiwi.IntegrateAllomorph = IntegratedAllomorph.IsChecked.Value;
-            
+
             KiwiCS.Match match = 0;
             if (NormalizeCoda.IsChecked.Value) match |= KiwiCS.Match.NormalizeCoda;
             if (ZCoda.IsChecked.Value) match |= KiwiCS.Match.ZCoda;
@@ -333,16 +322,22 @@ namespace KiwiGui
             if (MatchHashtag.IsChecked.Value) match |= KiwiCS.Match.Hashtag;
             if (MatchMention.IsChecked.Value) match |= KiwiCS.Match.Mention;
             if (MatchSerial.IsChecked.Value) match |= KiwiCS.Match.Serial;
+            if (MatchEmoji.IsChecked.Value) match |= KiwiCS.Match.Emoji;
             if (JoinNounPrefix.IsChecked.Value) match |= KiwiCS.Match.JoinNounPrefix;
             if (JoinNounSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinNounSuffix;
             if (JoinVerbSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinVerbSuffix;
             if (JoinAdjSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinAdjSuffix;
             if (JoinAdvSuffix.IsChecked.Value) match |= KiwiCS.Match.JoinAdvSuffix;
+            if (JoinParticleYo.IsChecked.Value) match |= KiwiCS.Match.JoinParticleYo;
             if (SaisiotTrue.IsChecked.Value) match |= KiwiCS.Match.SplitSaisiot;
             if (SaisiotFalse.IsChecked.Value) match |= KiwiCS.Match.MergeSaisiot;
 
+            if (OOVCmb.SelectedIndex == 0) match |= KiwiCS.Match.OovRuleOnly;
+            else if (OOVCmb.SelectedIndex == 1) match |= KiwiCS.Match.OovChrModel;
+            else if (OOVCmb.SelectedIndex == 2) match |= KiwiCS.Match.OovChrFreqModel;
+
             bool hasContent = false;
-            foreach(var r in AnalyzeText(InputTxt.Text, TypeCmb.SelectedIndex, match, enabledDialects, topN))
+            foreach (var r in AnalyzeText(InputTxt.Text, TypeCmb.SelectedIndex, match, enabledDialects, topN))
             {
                 hasContent = true;
                 resultData.Add(r);
@@ -407,22 +402,6 @@ namespace KiwiGui
             UpdateAnalyzeResult();
         }
 
-        private void MenuTypo_Checked(object sender, RoutedEventArgs e)
-        {
-            if (InputTxt == null) return;
-            useTypoCorrection = true;
-            UpdateKiwiModel();
-            UpdateAnalyzeResult();
-        }
-
-        private void MenuTypo_Unchecked(object sender, RoutedEventArgs e)
-        {
-            if (InputTxt == null) return;
-            useTypoCorrection = false;
-            UpdateKiwiModel();
-            UpdateAnalyzeResult();
-        }
-
         private void MenuMulti_Checked(object sender, RoutedEventArgs e)
         {
             if (InputTxt == null) return;
@@ -458,6 +437,44 @@ namespace KiwiGui
             dlg.Owner = this;
             dlg.Show();
         }
-    }
 
+        private void TypoThresholdBox_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
+        {
+            TextBox textBox = sender as TextBox;
+            string newText = textBox.Text.Insert(textBox.SelectionStart, e.Text);
+
+            // 양의 실수(소수점 1개 허용) 정규식 검사
+            System.Text.RegularExpressions.Regex regex = new System.Text.RegularExpressions.Regex("^[0-9]*(?:\\.[0-9]*)?$");
+            e.Handled = !regex.IsMatch(newText);
+        }
+
+        private void TypoCmb_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (InputTxt == null) return;
+            switch (TypoCmb.SelectedIndex)
+            {
+                case 0:
+                    typoSet = KiwiCS.DefaultTypoSet.WithoutTypo;
+                    break;
+                case 1:
+                    typoSet = KiwiCS.DefaultTypoSet.BasicTypoSet;
+                    break;
+                case 2:
+                    typoSet = KiwiCS.DefaultTypoSet.BasicTypoSetWithContinual;
+                    break;
+                case 3:
+                    typoSet = KiwiCS.DefaultTypoSet.BasicTypoSetWithContinualAndLengthening;
+                    break;
+            }
+            if (TypoCmb.SelectedIndex > 0)
+            {
+                typoTransformer = new KiwiCS.TypoTransformer(typoSet).Prepare();
+            }
+            else
+            {
+                typoTransformer = null;
+            }
+            UpdateAnalyzeResult();
+        }
+    }
 }
