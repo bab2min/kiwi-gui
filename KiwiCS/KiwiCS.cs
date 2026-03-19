@@ -16,6 +16,7 @@ namespace KiwiCS
     using KiwiJoinerHandle = IntPtr;
     using KiwiMorphsetHandle = IntPtr;
     using KiwiPretokenizedHandle = IntPtr;
+    using KiwiPreparedTypoHandle = IntPtr;
     using KiwiSwtokenizerHandle = IntPtr;
     internal class Utf8String : IDisposable
     {
@@ -206,7 +207,9 @@ namespace KiwiCS
             public KiwiMorphsetHandle blocklist; /* 분석 후보 탐색 과정에서 blocklist에 포함된 형태소들은 배제됩니다 */
             public int openEnding; /* 마지막 형태소 다음 문장을 종결하지 않고 열린 상태로 끝낼지를 설정합니다 */
             public int allowedDialects; /* KIWI_DIALECT_* 열거형 참고 */
-            public float dialectCost; /* 방언 형태소에 추가되는 비용 */
+            public float dialectCost; /* 방언 형태소에 추가되는 비용. 기본값은 3 */
+            public KiwiPreparedTypoHandle typoTransformer; /* 분석 시 사용할 오타 교정기. null인 경우 사용하지 않습니다 */
+            public float typoThreshold; /* 오타 교정 비용 임계값. 기본값은 2.5 */
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -214,11 +217,16 @@ namespace KiwiCS
         {
             public byte integrateAllomorph; /* 이형태 형태소의 통합 여부 */
             public float cutOffThreshold; /* 분석 과정에서 이 값보다 더 크게 차이가 나는 후보들은 제거합니다 */
-            public float unkFormScoreScale; /* 미등재 형태 추출 시 사용하는 기울기 값 */
-            public float unkFormScoreBias; /* 미등재 형태 추출 시 사용하는 편향 값 */
+            public float oovRuleScale; /* 미등재 형태 추출 시 사용하는 기울기 값 */
+            public float oovRuleBias; /* 미등재 형태 추출 시 사용하는 편향 값 */
+            public float oovChrBias; /* 미등재 형태 추출 시 사용하는 문자 기반 점수의 편향 값 */
+            public float oovGlobalWeight; /* 미등재 형태 추출 시 사용하는 전역 빈도 가중치 */
+            public float oovLocalWeight; /* 미등재 형태 추출 시 사용하는 국부 빈도 가중치 */
+            public float oovGlobalMinFreq; /* 미등재 형태 추출 시 사용하는 전역 최소 빈도 */
             public float spacePenalty; /* 공백 패널티 */
             public float typoCostWeight; /* 오타 비용의 가중치 */
             public uint maxUnkFormSize; /* 미등재 형태의 최대 크기 */
+            public uint maxUnkFormSizeFollowedByJClass; /* (조사가 뒤따르는 경우) 미등재 형태의 최대 크기 */
             public uint spaceTolerance; /* 공백 허용치 */
         }
 
@@ -285,7 +293,16 @@ namespace KiwiCS
         public static extern int kiwi_builder_add_alias_word(KiwiBuilderHandle handle, CString alias, CString pos, float score, CString origWord);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_builder_add_word_with_def(KiwiBuilderHandle handle, CString word, CString pos, int senseId, int dialect, float score);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_builder_add_alias_word_with_def(KiwiBuilderHandle handle, CString alias, CString pos, int senseId, int dialect, float score, CString origWord);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_builder_add_pre_analyzed_word(KiwiBuilderHandle handle, CString form, int size, IntPtr analyzedMorphs, IntPtr analyzedPos, float score, IntPtr positions);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_builder_add_rule(KiwiBuilderHandle handle, CString pos, IntPtr replacer, IntPtr userData, float score);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_builder_load_dict(KiwiBuilderHandle handle, CString dictPath);
@@ -301,7 +318,7 @@ namespace KiwiCS
 
         // analyzer initialization functions
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
-        public static extern KiwiHandle kiwi_init(CString modelPath, int numThreads, int options);
+        public static extern KiwiHandle kiwi_init(CString modelPath, int numThreads, int options, int enabledDialects);
 
         // analyzer functions
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
@@ -390,6 +407,9 @@ namespace KiwiCS
         public static extern IntPtr kiwi_res_token_info(KiwiResHandle result, int index, int num);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_res_morpheme_id(KiwiResHandle result, int index, int num, KiwiHandle kiwiHandle);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_res_close(KiwiResHandle result);
 
         // word management functions
@@ -450,6 +470,19 @@ namespace KiwiCS
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_pt_close(KiwiPretokenizedHandle handle);
 
+        // swtokenizer functions
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiSwtokenizerHandle kiwi_swt_init(CString path, KiwiHandle kiwi);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_swt_encode(KiwiSwtokenizerHandle handle, CString text, int textSize, IntPtr tokenIds, int tokenIdsBufSize, IntPtr offsets, int offsetBufSize);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_swt_decode(KiwiSwtokenizerHandle handle, IntPtr tokenIds, int tokenSize, IntPtr text, int textBufSize);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_swt_close(KiwiSwtokenizerHandle handle);
+
         // typo transformer functions
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern KiwiTypoHandle kiwi_typo_init();
@@ -482,6 +515,12 @@ namespace KiwiCS
         public static extern int kiwi_typo_close(KiwiTypoHandle typo);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern KiwiPreparedTypoHandle kiwi_typo_prepare(KiwiTypoHandle handle);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int kiwi_prepared_typo_close(KiwiPreparedTypoHandle handle);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern KiwiJoinerHandle kiwi_new_joiner(KiwiHandle handle, int lmSearch);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
@@ -511,6 +550,9 @@ namespace KiwiCS
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern CString kiwi_get_morpheme_form_w(KiwiHandle handle, uint morphId);
+
+        [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
+        public static extern CString kiwi_get_morpheme_form(KiwiHandle handle, uint morphId);
 
         [DllImport(dll_name, CallingConvention = CallingConvention.Cdecl)]
         public static extern int kiwi_free_morpheme_form(CString form);
@@ -647,7 +689,13 @@ namespace KiwiCS
         Hashtag = 1 << 2,
         Mention = 1 << 3,
         Serial = 1 << 4,
-        All = Url | Email | Hashtag | Mention | Serial,
+        Emoji = 1 << 5,
+
+        OovRuleOnly = 0 << 8,
+        OovChrModel = 1 << 8,
+        OovChrFreqModel = 2 << 8,
+        OovChrFreqBranchModel = 3 << 8,
+        OovMask = 3 << 8,
 
         NormalizeCoda = 1 << 16,
 
@@ -656,11 +704,18 @@ namespace KiwiCS
         JoinVerbSuffix = 1 << 19,
         JoinAdjSuffix = 1 << 20,
         JoinAdvSuffix = 1 << 21,
+        JoinVSuffix = JoinVerbSuffix | JoinAdjSuffix,
+        JoinAffix = JoinNounPrefix | JoinNounSuffix | JoinVSuffix | JoinAdvSuffix,
         SplitComplex = 1 << 22,
         ZCoda = 1 << 23,
         CompatibleJamo = 1 << 24,
         SplitSaisiot = 1 << 25,
         MergeSaisiot = 1 << 26,
+        JoinParticleYo = 1 << 27,
+        UseOldSplitter = 1 << 30,
+
+        All = Url | Email | Hashtag | Mention | Serial | Emoji | ZCoda,
+        AllWithNormalizing = All | NormalizeCoda,
     }
 
     public enum Dialect
@@ -703,9 +758,12 @@ namespace KiwiCS
     public enum DefaultTypoSet
     {
         WithoutTypo = 0,
-        BasicTypoSet,
-        ContinualTypoSet,
-        BasicTypoSetWithContinual,
+        BasicTypoSet = 1,
+        ContinualTypoSet = 2,
+        BasicTypoSetWithContinual = 3,
+        LengtheningTypoSet = 4,
+        BasicTypoSetWithContinualAndLengthening = 5,
+        Dialect = 6,
     }
 
     public class TypoTransformer
@@ -736,12 +794,45 @@ namespace KiwiCS
             }
         }
 
+        public PreparedTypoTransformer Prepare()
+        {
+            KiwiPreparedTypoHandle h = KiwiCAPI.kiwi_typo_prepare(inst);
+            if (h == IntPtr.Zero) throw new KiwiException(Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_error()));
+            return new PreparedTypoTransformer(h);
+        }
+
         ~TypoTransformer()
         {
             if (inst != null && !readOnly)
             {
                 KiwiCAPI.kiwi_typo_close(inst);
             }
+        }
+    }
+
+    public class PreparedTypoTransformer : IDisposable
+    {
+        internal KiwiPreparedTypoHandle inst;
+        private bool disposed = false;
+
+        internal PreparedTypoTransformer(KiwiPreparedTypoHandle handle)
+        {
+            inst = handle;
+        }
+
+        public void Dispose()
+        {
+            if (!disposed && inst != IntPtr.Zero)
+            {
+                KiwiCAPI.kiwi_prepared_typo_close(inst);
+                inst = IntPtr.Zero;
+                disposed = true;
+            }
+        }
+
+        ~PreparedTypoTransformer()
+        {
+            Dispose();
         }
     }
 
@@ -998,7 +1089,7 @@ namespace KiwiCS
             return Marshal.PtrToStringAnsi(KiwiCAPI.kiwi_version());
         }
 
-        public Result[] Analyze(string text, int topN = 1, Match matchOptions = Match.All, Dialect allowedDialects = Dialect.Standard, float dialectCost = 3.0f)
+        public Result[] Analyze(string text, int topN = 1, Match matchOptions = Match.All, Dialect allowedDialects = Dialect.Standard, float dialectCost = 3.0f, PreparedTypoTransformer typoTransformer = null, float typoThreshold = 2.5f)
         {
             KiwiCAPI.AnalyzeOption option = new KiwiCAPI.AnalyzeOption
             {
@@ -1006,7 +1097,9 @@ namespace KiwiCS
                 blocklist = IntPtr.Zero,
                 openEnding = 0,
                 allowedDialects = (int)allowedDialects,
-                dialectCost = dialectCost
+                dialectCost = dialectCost,
+                typoTransformer = typoTransformer?.inst ?? IntPtr.Zero,
+                typoThreshold = typoThreshold
             };
             using (var textStr = new Utf16String(text))
             {
@@ -1018,7 +1111,7 @@ namespace KiwiCS
             }
         }
 
-        public void AnalyzeMulti(Reader reader, Receiver receiver, int topN = 1, Match matchOptions = Match.All, Dialect allowedDialects = Dialect.Standard, float dialectCost = 3.0f)
+        public void AnalyzeMulti(Reader reader, Receiver receiver, int topN = 1, Match matchOptions = Match.All, Dialect allowedDialects = Dialect.Standard, float dialectCost = 3.0f, PreparedTypoTransformer typoTransformer = null, float typoThreshold = 2.5f)
         {
             GCHandle handle = GCHandle.Alloc(this);
             this.reader = reader;
@@ -1030,7 +1123,9 @@ namespace KiwiCS
                 blocklist = IntPtr.Zero,
                 openEnding = 0,
                 allowedDialects = (int)allowedDialects,
-                dialectCost = dialectCost
+                dialectCost = dialectCost,
+                typoTransformer = typoTransformer?.inst ?? IntPtr.Zero,
+                typoThreshold = typoThreshold
             };
             int ret = KiwiCAPI.kiwi_analyze_mw(inst, readerInst, receiverInst, (IntPtr)handle, topN, option);
             handle.Free();
@@ -1088,24 +1183,24 @@ namespace KiwiCS
             }
         }
 
-        public float UnkFormScoreScale
+        public float OovRuleScale
         {
-            get { return KiwiCAPI.kiwi_get_global_config(inst).unkFormScoreScale; }
+            get { return KiwiCAPI.kiwi_get_global_config(inst).oovRuleScale; }
             set
             {
                 var config = KiwiCAPI.kiwi_get_global_config(inst);
-                config.unkFormScoreScale = value;
+                config.oovRuleScale = value;
                 KiwiCAPI.kiwi_set_global_config(inst, config);
             }
         }
 
-        public float UnkFormScoreBias
+        public float OovRuleBias
         {
-            get { return KiwiCAPI.kiwi_get_global_config(inst).unkFormScoreBias; }
+            get { return KiwiCAPI.kiwi_get_global_config(inst).oovRuleBias; }
             set
             {
                 var config = KiwiCAPI.kiwi_get_global_config(inst);
-                config.unkFormScoreBias = value;
+                config.oovRuleBias = value;
                 KiwiCAPI.kiwi_set_global_config(inst, config);
             }
         }
